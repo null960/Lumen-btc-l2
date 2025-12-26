@@ -9,14 +9,14 @@ tokio = { version = "1.37", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
+axum = "0.7"
+tower = { version = "0.4", features = ["util"] }
+
 # Work with JSON
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Work with Bitcoin
+# Bitcoin and Solana
 bitcoin = { version = "0.30", features = ["rand"] }
 hex = "0.4"
-
-# Work with SVM
 solana-sdk = "1.18" 
-solana-client = "1.18"

@@ -1,7 +1,7 @@
 use std::{thread, time::Duration};
 use bitcoin::hashes::{sha256d, Hash};
 
-// Adapter structure for the Data Availability (DA) layer
+// Adapter structure for the Data Availability layer
 pub struct BitcoinDAAdapter {
     network: String,
 }

@@ -1,42 +1,42 @@
-use solana_sdk::signature::{Keypair, Signer};
-use bitcoin::Network;
-
-// Import local DA module
+use std::sync::Arc;
 mod da_adapter;
-use da_adapter::BitcoinDAAdapter;
+mod rpc;
+mod mempool;
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
     tracing_subscriber::fmt::init();
     
     println!("--------------------------------------------------");
-    println!("🚀 Starting Lumen-btc-l2 Node (Grant MVP)");
+    println!("🚀 Starting Lumen-btc-l2 (Phase 2.1 Sync)");
     println!("--------------------------------------------------");
 
-    // 1. Initialize SVM Identity
-    let svm_wallet = Keypair::new();
-    println!("✅ SVM Module Initialized");
-    println!("🔑 Node Operator PubKey: {:?}", svm_wallet.pubkey());
+    // 1. Initialize shared mempool
+    let mempool = mempool::init_mempool();
+    let da_layer = da_adapter::BitcoinDAAdapter::new("Bitcoin Signet");
 
-    // 2. Initialize Bitcoin DA Adapter
-    let btc_network = Network::Testnet;
-    let da_layer = BitcoinDAAdapter::new("Bitcoin Testnet (via Nubit)");
-    
-    println!("✅ Bitcoin Data Availability Module Initialized");
-    println!("🔗 Targeted Network: {:?}", btc_network);
-    
-    println!("--------------------------------------------------");
-    println!("🔄 Simulation: Producing Block #1...");
+    // 2. Spawn RPC server
+    let rpc_mempool = Arc::clone(&mempool);
+    tokio::spawn(async move {
+        rpc::start_rpc_server(rpc_mempool).await;
+    });
 
-    // 3. Simulate L2 Block Creation
-    // Mock data representing encrypted user transactions
-    let mock_l2_block_data = b"User A sent 100 USDC to User B via SVM"; 
-    
-    // Submit batch to the Data Availability layer
-    let tx_id = da_layer.submit_batch(mock_l2_block_data).await;
+    println!("⚙️ Sequencer active. Watching mempool...");
 
-    println!("✅ Block #1 Finalized on Bitcoin!");
-    println!("🧾 Proof (TxID): {}", tx_id);
-    println!("--------------------------------------------------");
+    // 3. Sequencer Loop (runs every 10s)
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        
+        let mut q = mempool.lock().unwrap();
+        if !q.is_empty() {
+            println!("📦 Sequencer: Batching {} transactions...", q.len());
+
+            let batch_data = format!("{:?}", *q); 
+            q.clear(); // Flush mempool
+
+            // Record batch on Bitcoin
+            let btc_txid = da_layer.submit_batch(batch_data.as_bytes()).await;
+            println!("✅ Batch anchored! Bitcoin TxID: {}", btc_txid);
+        }
+    }
 }
