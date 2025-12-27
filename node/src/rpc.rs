@@ -3,6 +3,7 @@ use axum::{
     Router,
     Json,
     extract::State,
+    http::StatusCode,
 };
 use crate::mempool::{SharedMempool, L2Transaction};
 use serde::Serialize;
@@ -13,22 +14,30 @@ pub struct SubmitTransactionResponse {
     pub tx_id: String,
 }
 
-// Handler for incoming SVM-like transactions
 async fn submit_tx_handler(
     State(mempool): State<SharedMempool>,
     Json(payload): Json<L2Transaction>,
-) -> Json<SubmitTransactionResponse> {
-    let mut q = mempool.lock().unwrap();
+) -> (StatusCode, Json<SubmitTransactionResponse>) {
     
+    // Check if the transaction is authentic (SVM Security)
+    if !payload.verify_signature() {
+        println!("❌ RPC: Unauthorized transaction attempt from {}", payload.sender);
+        return (StatusCode::BAD_REQUEST, Json(SubmitTransactionResponse {
+            status: "Error: Invalid Signature".to_string(),
+            tx_id: "none".to_string(),
+        }));
+    }
+
+    let mut q = mempool.lock().unwrap();
     let mock_id = format!("lumen_tx_{}", q.len() + 1);
     
     q.push_back(payload.clone());
-    println!("📥 RPC: Received Tx from {}", payload.sender);
+    println!("📥 RPC: Verified & Accepted Tx from {}", payload.sender);
 
-    Json(SubmitTransactionResponse {
+    (StatusCode::OK, Json(SubmitTransactionResponse {
         status: "Queued for Bitcoin DA".to_string(),
         tx_id: mock_id,
-    })
+    }))
 }
 
 pub async fn start_rpc_server(mempool: SharedMempool) {

@@ -14,31 +14,22 @@ This MVP demonstrates the core lifecycle of a Lumen-btc-l2 Rollup block:
 3.  **DA Submission:** The batch proof is hashed and submitted to the Bitcoin network (Testnet/Signet).
 
 ## 🗺 Roadmap
-### Phase 1: MVP & Architecture (Current Status)
+
+### Phase 1: MVP & Architecture (Completed)
 - [x] **Core Node Initialization:** Setup Rust workspace and basic node structure.
 - [x] **SVM Integration:** Integrate Solana Virtual Machine for local transaction execution.
 - [x] **Data Availability (Mock):** Implement abstract DA adapter interface.
 - [x] **Bitcoin Connection:** Establish connection to Bitcoin Testnet types.
 
-### Phase 2: Testnet Alpha
-- [ ] **Live DA Integration:** Replace mock adapter with real **Nubit** or **Babylon** testnet implementation.
-- [ ] **RPC Interface:** Implement JSON-RPC for standard wallet connection (Phantom/Backpack).
-- [ ] **Sequencer:** Implement a basic centralized sequencer to order transactions before execution.
+### Phase 2: Testnet Alpha (Completed)
+- [x] **RPC Interface:** Implemented JSON-RPC server (Axum) for receiving transactions.
+- [x] **Mempool System:** Added thread-safe storage for pending SVM-style transactions.
+- [x] **Sequencer Logic:** Implemented automated batching of transactions every 10 seconds.
+- [x] **Data Persistence:** Added `batches.log` to track Bitcoin anchoring history.
+- [x] **Secured Execution:** Integrated signature verification logic (ed25519) at the RPC level.
 
-### Phase 3: Public Beta
-- [ ] **Trustless Bridge:** Development of a SPV (Simplified Payment Verification) client for bridging BTC in/out.
+### Phase 3: Public Beta (In Progress)
 - [ ] **Block Explorer:** Simple web-interface to view L2 blocks and batches anchored on Bitcoin.
-- [ ] **Developer SDK:** CLI tools for deploying Rust/Anchor smart contracts to Lumen-btc-l2.
-
-## ⚡ Quick Start (MVP)
-### Prerequisites
-* Rust (latest stable)
-* Solana Tool Suite
-
-### Running the Node
-```bash
-# Clone the repository
-git clone https://github.com/null960/Lumen-btc-l2.git
-
-# Run the node
-cargo run -p node
+- [ ] **Live DA Integration:** Transitioning from mock adapter to **Nubit** or **Babylon** testnet.
+- [ ] **Trustless Bridge:** Development of an SPV client for BTC bridging.
+- [ ] **Developer SDK:** CLI tools for deploying Anchor contracts to Lumen-btc-l2.
