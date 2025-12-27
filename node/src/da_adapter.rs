@@ -1,33 +1,27 @@
-use std::{thread, time::Duration};
-use bitcoin::hashes::{sha256d, Hash};
+use tokio::time::{sleep, Duration};
+use std::error::Error;
 
-// Adapter structure for the Data Availability layer
 pub struct BitcoinDAAdapter {
-    network: String,
+    pub network: String,
 }
 
 impl BitcoinDAAdapter {
-    // Constructor: initializes the adapter
     pub fn new(network: &str) -> Self {
         Self {
             network: network.to_string(),
         }
     }
 
-    // Simulates submitting a batch of L2 transactions to Bitcoin
-    pub async fn submit_batch(&self, batch_data: &[u8]) -> String {
-        println!("📦 Preparing to submit L2 Batch (Size: {} bytes) to {}", batch_data.len(), self.network);
+    pub async fn submit_batch(&self, data: &[u64]) -> Result<String, Box<dyn Error>> {
+        let size = data.len() * 8;
+        println!("🌐 DA Layer [{}]: Connecting to provider...", self.network);
         
-        // 1. Simulate network latency
-        thread::sleep(Duration::from_secs(2));
+        // Simulating network latency for a real blockchain write
+        sleep(Duration::from_millis(1500)).await;
 
-        // 2. Calculate hash to verify data integrity
-        let hash = sha256d::Hash::hash(batch_data);
+        let mock_txid = format!("txid_btc_{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
         
-        println!("🚀 Batch broadcasted! Waiting for confirmation...");
-        thread::sleep(Duration::from_secs(1));
-
-        // Return a mock Bitcoin Transaction ID
-        format!("txid_btc_{}", hash)
+        println!("📤 DA Layer: Uploaded {} bytes to Bitcoin DA.", size);
+        Ok(mock_txid)
     }
 }

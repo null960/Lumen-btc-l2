@@ -11,7 +11,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
     
     println!("--------------------------------------------------");
-    println!("🚀 Starting Lumen-btc-l2 (Phase 2.2: Secured)");
+    println!("🚀 Starting Lumen-btc-l2");
     println!("--------------------------------------------------");
 
     let mempool = mempool::init_mempool();
@@ -29,24 +29,21 @@ async fn main() {
         
         let mut q = mempool.lock().unwrap();
         if !q.is_empty() {
-            println!("📦 Sequencer: Batching {} verified transactions...", q.len());
-
-            let batch_data = format!("{:?}", *q); 
+            let tx_count = q.len();
+            let raw_data: Vec<u64> = vec![0; tx_count]; 
             q.clear(); 
 
-            let btc_txid = da_layer.submit_batch(batch_data.as_bytes()).await;
-            
-            // Log for future Block Explorer
-            let log_entry = format!("Block Anchored | BtcTxID: {}\n", btc_txid);
-            let mut file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("batches.log")
-                .expect("Failed to open log file");
-            
-            file.write_all(log_entry.as_bytes()).ok();
-
-            println!("✅ Batch anchored to Bitcoin! TxID: {}", btc_txid);
+            // Submit and handle potential network errors
+            match da_layer.submit_batch(&raw_data).await {
+                Ok(btc_txid) => {
+                    let log_entry = format!("Block Anchored | Txs: {} | BtcTxID: {}\n", tx_count, btc_txid);
+                    let mut file = OpenOptions::new().create(true).append(true).open("batches.log").unwrap();
+                    file.write_all(log_entry.as_bytes()).unwrap();
+                    
+                    println!("✅ Success: Batch anchored! TxID: {}", btc_txid);
+                },
+                Err(e) => println!("❌ DA Error: Failed to anchor batch: {}", e),
+            }
         }
     }
 }
