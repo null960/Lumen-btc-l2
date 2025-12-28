@@ -21,3 +21,6 @@ bitcoin = { version = "0.30", features = ["rand"] }
 hex = "0.4"
 solana-sdk = "1.18" 
 uuid = { version = "1.0", features = ["v4"] }
+reqwest = { version = "0.11", features = ["json"] }
+base64 = "0.21"
+chrono = "0.4"
