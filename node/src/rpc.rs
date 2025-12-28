@@ -7,8 +7,15 @@ use axum::{
     response::Html,
 };
 use crate::mempool::{SharedMempool, L2Transaction};
+use crate::state::SharedState;
 use serde::Serialize;
 use std::fs;
+
+#[derive(Clone)]
+pub struct RpcState {
+    pub mempool: SharedMempool,
+    pub state: SharedState,
+}
 
 #[derive(Debug, Serialize)]
 pub struct SubmitTransactionResponse {
@@ -16,11 +23,14 @@ pub struct SubmitTransactionResponse {
     pub tx_id: String,
 }
 
-async fn explorer_handler() -> Html<String> {
+async fn explorer_handler(State(rpc_state): State<RpcState>) -> Html<String> {
     let log_content = fs::read_to_string("batches.log")
         .unwrap_or_else(|_| "No batches anchored yet.".to_string());
 
-    // Count lines as mock block height
+    let state = rpc_state.state.lock().unwrap();
+    let total_txs = state.total_transactions;
+    let contract_counter = state.smart_contract_counter;
+    
     let block_height = log_content.lines().count();
 
     let html = format!(
@@ -29,88 +39,90 @@ async fn explorer_handler() -> Html<String> {
         <html>
         <head>
             <title>Lumen L2 Explorer</title>
-            <style>
-                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0d1117; color: #c9d1d9; margin: 0; padding: 40px; }}
+            <meta http-equiv="refresh" content="5"> <style>
+                body {{ font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 40px; }}
                 .container {{ max-width: 900px; margin: auto; }}
-                .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #30363d; padding-bottom: 20px; }}
-                .stats {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }}
-                .stat-card {{ background: #161b22; padding: 20px; border-radius: 8px; border: 1px solid #30363d; }}
-                .stat-value {{ font-size: 24px; color: #58a6ff; font-weight: bold; }}
-                .log-box {{ background: #010409; padding: 20px; border-radius: 8px; border: 1px solid #30363d; overflow-x: auto; line-height: 1.6; }}
-                .anchor-line {{ color: #7ee787; border-bottom: 1px solid #21262d; padding: 5px 0; font-family: 'Courier New', monospace; }}
-                .status {{ font-size: 14px; color: #8b949e; margin-top: 20px; }}
-                .tag {{ background: #238636; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; }}
+                .header {{ border-bottom: 1px solid #30363d; padding-bottom: 20px; margin-bottom: 20px; }}
+                .stats-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px; }}
+                .card {{ background: #161b22; padding: 20px; border-radius: 8px; border: 1px solid #30363d; }}
+                .card h3 {{ margin: 0 0 10px 0; font-size: 14px; color: #8b949e; }}
+                .card .val {{ font-size: 28px; font-weight: bold; color: #58a6ff; }}
+                .card .val.green {{ color: #3fb950; }}
+                .card .val.orange {{ color: #f7931a; }}
+                .log-box {{ background: #010409; padding: 15px; border-radius: 8px; border: 1px solid #30363d; font-family: monospace; color: #7ee787; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>Lumen L2 Explorer <span class="tag">Mainnet-Sim</span></h1>
-                    <button onclick="location.reload()" style="background:#21262d; color:white; border:1px solid #30363d; padding:8px 16px; border-radius:6px; cursor:pointer;">Refresh</button>
+                    <h1>🟠 Lumen-btc-l2 <span style="font-size:14px; background:#238636; padding:2px 8px; border-radius:10px;">Live Testnet</span></h1>
                 </div>
-                
-                <div class="stats">
-                    <div class="stat-card">
-                        <div>Current Block Height</div>
-                        <div class="stat-value">#{}</div>
+
+                <div class="stats-grid">
+                    <div class="card">
+                        <h3>Smart Contract State</h3>
+                        <div class="val green">{}</div> <small>Global Counter</small>
                     </div>
-                    <div class="stat-card">
-                        <div>Network DA Layer</div>
-                        <div class="stat-value" style="color:#f7931a">Nubit (Bitcoin)</div>
+                    <div class="card">
+                        <h3>Total Transactions</h3>
+                        <div class="val">{}</div>
+                    </div>
+                    <div class="card">
+                        <h3>Block Height</h3>
+                        <div class="val orange">#{}</div>
                     </div>
                 </div>
 
-                <h3>Recent Anchored Batches</h3>
+                <h3>📜 Data Availability Log (Bitcoin Anchors)</h3>
                 <div class="log-box">
                     {}
-                </div>
-
-                <div class="status">
-                    🟢 Node Status: Active | Protocol: SVM-L2 | Bridge: Trusted-MPC
                 </div>
             </div>
         </body>
         </html>
         "#,
+        contract_counter,
+        total_txs,
         block_height,
-        log_content.lines().rev().map(|line| format!("<div class='anchor-line'>{}</div>", line)).collect::<Vec<String>>().join("")
+        log_content.lines().rev().collect::<Vec<_>>().join("<br>")
     );
 
     Html(html)
 }
 
 async fn submit_tx_handler(
-    State(mempool): State<SharedMempool>,
+    State(rpc_state): State<RpcState>,
     Json(payload): Json<L2Transaction>,
 ) -> (StatusCode, Json<SubmitTransactionResponse>) {
     
+
     if !payload.verify_signature() {
-        return (StatusCode::BAD_REQUEST, Json(SubmitTransactionResponse {
-            status: "Error: Invalid Signature".to_string(),
-            tx_id: "none".to_string(),
-        }));
+         return (StatusCode::BAD_REQUEST, Json(SubmitTransactionResponse {
+             status: "Invalid Signature".to_string(),
+             tx_id: "none".to_string(),
+         }));
     }
 
-    let mut q = mempool.lock().unwrap();
-    let mock_id = format!("lumen_tx_{}", q.len() + 1);
-    q.push_back(payload.clone());
+    let mut q = rpc_state.mempool.lock().unwrap();
+    q.push_back(payload);
 
     (StatusCode::OK, Json(SubmitTransactionResponse {
         status: "Queued".to_string(),
-        tx_id: mock_id,
+        tx_id: "pending".to_string(),
     }))
 }
 
-pub async fn start_rpc_server(mempool: SharedMempool) {
+pub async fn start_rpc_server(mempool: SharedMempool, state: SharedState) {
+    let rpc_state = RpcState { mempool, state };
+
     let app = Router::new()
-        .route("/health", get(|| async { "Lumen L2 Node is Healthy! 🟢" }))
+        .route("/health", get(|| async { "OK" }))
         .route("/submit", post(submit_tx_handler))
         .route("/explorer", get(explorer_handler))
-        .with_state(mempool);
+        .with_state(rpc_state);
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("🌐 RPC Server listening on http://{}", addr);
-    println!("📊 Block Explorer available at http://{}/explorer", addr);
+    println!("🌐 Explorer UI: http://{}/explorer", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

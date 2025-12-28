@@ -12,15 +12,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Create a new wallet
     CreateWallet,
-    /// Send a transaction to the L2 Node
     Transfer {
         #[arg(short, long)]
         to: String,
         #[arg(short, long)]
         amount: u64,
     },
+    Increment,
 }
 
 #[derive(Serialize)]
@@ -31,7 +30,7 @@ struct L2Transaction {
     signature: String,
 }
 
-#[tokio::main] // Added for async HTTP requests
+#[tokio::main]
 async fn main() {
     let cli = Cli::parse();
 
@@ -41,41 +40,50 @@ async fn main() {
             keypair.write_to_file("keypair.json").expect("Failed to write keypair");
             println!("✨ Wallet created! PubKey: {}", keypair.pubkey());
         }
-        Commands::Transfer { to, amount } => {
-            // 1. Load your keypair
-            let keypair = Keypair::read_from_file("keypair.json").expect("No keypair.json found!");
-            
-            // 2. Prepare the instruction (message to sign)
-            let instruction = format!("Transfer to {}", to);
-            
-            // 3. Create cryptographic signature
-            let signature = keypair.sign_message(instruction.as_bytes()).to_string();
-
-            // 4. Build the JSON payload
-            let tx = L2Transaction {
-                sender: keypair.pubkey().to_string(),
-                instruction,
-                amount: *amount,
-                signature,
-            };
-
-            // 5. Send to the Node RPC
-            let client = Client::new();
-            println!("🚀 Sending tx to http://127.0.0.1:3000/submit...");
-            
-            let res = client.post("http://127.0.0.1:3000/submit")
-                .json(&tx)
-                .send()
-                .await;
-
-            match res {
-                Ok(response) => {
-                    let status = response.status();
-                    let body = response.text().await.unwrap();
-                    println!("📡 Node Response [{}]: {}", status, body);
-                }
-                Err(e) => println!("❌ Failed to connect to node: {}", e),
-            }
+        
+        Commands::Transfer { to: _, amount } => {
+            process_tx("Transfer", *amount).await;
         }
+
+        Commands::Increment => {
+            process_tx("Increment", 0).await;
+        }
+    }
+}
+
+// Helper function to avoid code duplication
+async fn process_tx(instruction_type: &str, amount: u64) {
+    let keypair = Keypair::read_from_file("keypair.json").expect("No keypair.json found!");
+    
+    // Usually, instruction data is complex, but here we use a string for MVP
+    let instruction = if instruction_type == "Increment" {
+        "Increment".to_string()
+    } else {
+        format!("Transfer (amount: {})", amount)
+    };
+    
+    // Sign the instruction
+    let signature = keypair.sign_message(instruction.as_bytes()).to_string();
+
+    let tx = L2Transaction {
+        sender: keypair.pubkey().to_string(),
+        instruction: instruction.clone(),
+        amount,
+        signature,
+    };
+
+    let client = Client::new();
+    println!("🚀 Sending '{}' to Node...", instruction_type);
+    
+    let res = client.post("http://127.0.0.1:3000/submit")
+        .json(&tx)
+        .send()
+        .await;
+
+    match res {
+        Ok(response) => {
+            println!("📡 Node Response: {}", response.status());
+        }
+        Err(e) => println!("❌ Connection Error: {}", e),
     }
 }
