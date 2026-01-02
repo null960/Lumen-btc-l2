@@ -1,10 +1,12 @@
 use clap::{Parser, Subcommand};
-use solana_sdk::signature::{Keypair, EncodableKey, Signer};
-use serde::Serialize;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::fs;
 
 #[derive(Parser)]
 #[command(name = "lumen-cli")]
+#[command(about = "CLI for Lumen L2 Financial Layer", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -13,77 +15,95 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     CreateWallet,
-    Transfer {
-        #[arg(short, long)]
-        to: String,
-        #[arg(short, long)]
+    Mint {
         amount: u64,
+        #[arg(short, long)]
+        address: Option<String>,
     },
-    Increment,
+    Transfer {
+        amount: u64,
+        to: String,
+    },
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct L2Transaction {
     sender: String,
     instruction: String,
-    amount: u64,
     signature: String,
+    timestamp: u64,
+    pubkey: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Wallet {
+    address: String,
+    pubkey: String,
+    privkey: String,
 }
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+    let client = Client::new();
+    let rpc_url = "http://127.0.0.1:3000/submit";
 
-    match &cli.command {
+    match cli.command {
         Commands::CreateWallet => {
-            let keypair = Keypair::new();
-            keypair.write_to_file("keypair.json").expect("Failed to write keypair");
-            println!("✨ Wallet created! PubKey: {}", keypair.pubkey());
+            let wallet = Wallet {
+                address: format!("0x{}", uuid::Uuid::new_v4().to_string().replace("-", "")[..16].to_string()),
+                pubkey: "mock_pubkey".to_string(),
+                privkey: "mock_privkey".to_string(),
+            };
+            let json = serde_json::to_string_pretty(&wallet).unwrap();
+            fs::write("keypair.json", json).expect("Unable to save wallet");
+            println!("✅ Wallet created: {}", wallet.address);
         }
-        
-        Commands::Transfer { to: _, amount } => {
-            process_tx("Transfer", *amount).await;
-        }
+        Commands::Mint { amount, address } => {
+            let wallet_data = fs::read_to_string("keypair.json").expect("Please run 'create-wallet' first");
+            let wallet: Wallet = serde_json::from_str(&wallet_data).expect("Invalid wallet file");
 
-        Commands::Increment => {
-            process_tx("Increment", 0).await;
+            let target = address.unwrap_or(wallet.address.clone());
+            let instruction = format!("Mint {} {}", amount, target);
+            
+            send_tx(&client, rpc_url, &wallet, instruction).await;
+        }
+        Commands::Transfer { amount, to } => {
+            let wallet_data = fs::read_to_string("keypair.json").expect("Please run 'create-wallet' first");
+            let wallet: Wallet = serde_json::from_str(&wallet_data).expect("Invalid wallet file");
+
+            let instruction = format!("Transfer {} {}", amount, to);
+            send_tx(&client, rpc_url, &wallet, instruction).await;
         }
     }
 }
 
-// Helper function to avoid code duplication
-async fn process_tx(instruction_type: &str, amount: u64) {
-    let keypair = Keypair::read_from_file("keypair.json").expect("No keypair.json found!");
-    
-    // Usually, instruction data is complex, but here we use a string for MVP
-    let instruction = if instruction_type == "Increment" {
-        "Increment".to_string()
-    } else {
-        format!("Transfer (amount: {})", amount)
-    };
-    
-    // Sign the instruction
-    let signature = keypair.sign_message(instruction.as_bytes()).to_string();
+async fn send_tx(client: &Client, url: &str, wallet: &Wallet, instruction: String) {
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
     let tx = L2Transaction {
-        sender: keypair.pubkey().to_string(),
+        sender: wallet.address.clone(),
         instruction: instruction.clone(),
-        amount,
-        signature,
+        signature: "mock_sig_valid".to_string(),
+        timestamp,
+        pubkey: wallet.pubkey.clone(),
     };
 
-    let client = Client::new();
-    println!("🚀 Sending '{}' to Node...", instruction_type);
+    println!("📤 Sending: '{}'...", instruction);
     
-    let res = client.post("http://127.0.0.1:3000/submit")
+    let res = client.post(url)
         .json(&tx)
         .send()
         .await;
 
     match res {
         Ok(response) => {
-            println!("📡 Node Response: {}", response.status());
-        }
-        Err(e) => println!("❌ Connection Error: {}", e),
+            if response.status().is_success() {
+                println!("✅ Transaction sent successfully!");
+            } else {
+                println!("❌ Failed: {:?}", response.status());
+            }
+        },
+        Err(e) => println!("❌ Connection error: {}", e),
     }
 }

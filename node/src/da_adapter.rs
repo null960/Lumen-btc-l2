@@ -25,7 +25,7 @@ impl BitcoinDAAdapter {
         let encoded_data = general_purpose::STANDARD.encode(batch_data);
 
         // Prepare JSON-RPC payload for Nubit blob submission
-        let client = Client::new();
+        let _client = Client::new();
         let _payload = json!({
             "jsonrpc": "2.0",
             "method": "blob.Submit",
