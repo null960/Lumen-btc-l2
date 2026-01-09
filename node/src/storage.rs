@@ -1,6 +1,6 @@
-use crate::state::AppState;
-use redb::{Database, TableDefinition};
 use std::error::Error;
+use crate::state::AppState;
+use redb::{Database, ReadableTable, TableDefinition}; 
 
 const STATE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("state");
 

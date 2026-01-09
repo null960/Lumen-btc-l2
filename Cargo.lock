@@ -888,8 +888,10 @@ dependencies = [
  "axum",
  "base64 0.21.7",
  "bincode",
+ "bitcoin",
  "bitcoincore-rpc",
  "hex",
+ "rand",
  "redb",
  "reqwest",
  "serde",
@@ -1086,9 +1088,9 @@ dependencies = [
 
 [[package]]
 name = "redb"
-version = "2.6.3"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eca1e9d98d5a7e9002d0013e18d5a9b000aee942eb134883a82f06ebffb6c01"
+checksum = "17a0b35b8077c954324cc3504bea8d35e27a2f5d07c0ba41052a35d92f020f84"
 dependencies = [
  "libc",
 ]

@@ -1,214 +1,253 @@
 use axum::{
-    extract::{State, Json},
-    response::Html,
     routing::{get, post},
-    Router,
+    Router, 
+    Json, 
+    response::{Html, IntoResponse}, 
+    extract::State,
 };
 use std::sync::{Arc, Mutex};
-use std::collections::VecDeque; 
 use crate::state::AppState;
-use crate::mempool::L2Transaction;
+use crate::mempool::Mempool;
 use serde::Deserialize;
-use std::time::{SystemTime, UNIX_EPOCH};
+use serde_json::json;
 
-// --- HTML INTERFACE ---
-const HTML_PAGE: &str = r#"
+#[derive(Clone)]
+pub struct ServerState {
+    pub app_state: Arc<Mutex<AppState>>,
+    pub mempool: Arc<Mutex<Mempool>>,
+}
+
+#[derive(Deserialize)]
+pub struct UserCommand {
+    pub cmd: String,
+}
+
+pub async fn run_server(state: Arc<Mutex<AppState>>, mempool: Arc<Mutex<Mempool>>) {
+    let shared_state = ServerState {
+        app_state: state,
+        mempool,
+    };
+
+    let app = Router::new()
+        .route("/wallet", get(wallet_ui))
+        .route("/api/state", get(get_state))
+        .route("/api/cmd", post(submit_command))
+        .with_state(shared_state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+
+async fn submit_command(
+    State(state): State<ServerState>,
+    Json(payload): Json<UserCommand>,
+) -> Json<serde_json::Value> {
+    let mut mempool = state.mempool.lock().unwrap();
+    println!("📩 RPC Received: {}", payload.cmd);
+    mempool.queue.push_back(payload.cmd);
+    Json(json!({ "status": "ok" }))
+}
+
+async fn get_state(State(state): State<ServerState>) -> Json<serde_json::Value> {
+    let app_state = state.app_state.lock().unwrap();
+    Json(json!({
+        "total_transactions": app_state.total_transactions,
+        "balances": app_state.balances,
+        "network": "Testnet",
+        "status": "Online" 
+    }))
+}
+
+async fn wallet_ui() -> impl IntoResponse {
+    let html = r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Lumen Terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumen L2 Command Center</title>
     <style>
-        body { background: #0d1117; color: #c9d1d9; font-family: 'Consolas', monospace; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .container { width: 800px; max-width: 90%; }
+        :root {
+            --bg-color: #050505;
+            --panel-bg: #111;
+            --border: #333;
+            --accent: #00ff41; /* Hacker Green */
+            --text: #e0e0e0;
+            --danger: #ff3333;
+        }
+        body { margin: 0; background-color: var(--bg-color); color: var(--text); font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; display: grid; grid-template-columns: 300px 1fr; }
         
-        .header { text-align: center; margin-bottom: 20px; }
-        .header h1 { color: #58a6ff; margin: 0; }
-        .header p { color: #8b949e; font-size: 0.9em; }
-
-        .dashboard { display: flex; gap: 20px; margin-bottom: 20px; }
-        .card { background: #161b22; padding: 15px; border: 1px solid #30363d; border-radius: 6px; flex: 1; text-align: center; }
-        .card h3 { margin: 0 0 10px 0; font-size: 0.8em; color: #8b949e; text-transform: uppercase; }
-        .balance { font-size: 1.8em; font-weight: bold; color: #fff; }
+        /* SIDEBAR */
+        .sidebar { background: var(--panel-bg); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+        .logo { font-size: 24px; font-weight: bold; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+        .logo span { color: var(--accent); }
         
-        .terminal { background: #000; border: 1px solid #30363d; border-radius: 6px; padding: 15px; height: 300px; overflow-y: auto; font-size: 0.9em; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .line { margin-bottom: 5px; }
-        .line.user { color: #58a6ff; }
-        .line.system { color: #7ee787; }
-        .line.error { color: #ff7b72; }
+        .stat-box { background: #000; border: 1px solid var(--border); padding: 15px; border-radius: 4px; }
+        .stat-label { font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 5px; }
+        .stat-value { font-size: 20px; font-weight: bold; color: var(--accent); }
+        .stat-value.btc { color: #f2a900; }
 
-        .input-area { display: flex; margin-top: 10px; }
-        .prompt { color: #58a6ff; padding: 10px 0 10px 10px; background: #161b22; border: 1px solid #30363d; border-right: none; border-radius: 6px 0 0 6px; font-weight: bold; }
-        input { flex: 1; background: #161b22; border: 1px solid #30363d; border-left: none; color: #fff; padding: 10px; font-family: inherit; outline: none; border-radius: 0 6px 6px 0; }
+        .status-dot { height: 10px; width: 10px; background-color: var(--accent); border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 5px var(--accent); }
 
-        .help-box { margin-top: 20px; background: #161b22; padding: 15px; border-radius: 6px; border: 1px solid #30363d; font-size: 0.85em; }
-        .cmd { color: #d2a8ff; font-weight: bold; }
+        /* MAIN TERMINAL */
+        .main { display: flex; flex-direction: column; padding: 20px; gap: 10px; height: 100vh; box-sizing: border-box; }
+        
+        .terminal-window { 
+            flex-grow: 1; 
+            background: #000; 
+            border: 1px solid var(--border); 
+            border-radius: 4px; 
+            padding: 15px; 
+            overflow-y: auto; 
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+        
+        .log-entry { margin-bottom: 5px; opacity: 0; animation: fadeIn 0.2s forwards; }
+        .log-time { color: #555; margin-right: 10px; }
+        .cmd-input-container { display: flex; gap: 10px; background: var(--panel-bg); padding: 10px; border: 1px solid var(--border); border-radius: 4px; align-items: center; }
+        .prompt { color: var(--accent); font-weight: bold; }
+        input { background: transparent; border: none; color: white; width: 100%; font-family: inherit; font-size: 16px; outline: none; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Lumen-BTC Terminal</h1>
-            <p>Phase 6</p>
-        </div>
-
-        <div class="dashboard">
-            <div class="card">
-                <h3>My L2 Address</h3>
-                <div style="font-size: 0.8em; word-break: break-all;" id="myAddr">0x107cb97206f84fa3</div>
+    <div class="sidebar">
+        <div class="logo">🟠 Lumen <span>L2</span></div>
+        
+        <div class="stat-box">
+            <div class="stat-label">Network Status</div>
+            <div style="display:flex; align-items:center;">
+                <div class="status-dot"></div> Online
             </div>
-            <div class="card">
-                <h3>Balance (LBTC)</h3>
-                <div class="balance" id="bal">0.00000000</div>
+            <div style="font-size: 11px; color: #555; margin-top: 5px;">Phase 3: Settlement Active</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">My Balance (L2)</div>
+            <div class="stat-value btc" id="balance">--- sats</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Total Transactions</div>
+            <div class="stat-value" id="tx-count">0</div>
+        </div>
+        
+        <div style="font-size: 12px; color: #444; margin-top: auto;">
+            Commands:<br>
+            - <span style="color:#888">Me</span><br>
+            - <span style="color:#888">Transfer &lt;amt&gt; &lt;to&gt;</span><br>
+            - <span style="color:#888">Withdraw &lt;amt&gt; &lt;addr&gt;</span>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="terminal-window" id="terminal">
+            <div class="log-entry" style="color: var(--accent)">
+                Initializing Lumen L2 Node Interface...
             </div>
+            <div class="log-entry">Connected to Testnet via Mempool.space API.</div>
+            <div class="log-entry">Waiting for input...</div>
+            <br>
         </div>
-
-        <div class="terminal" id="term">
-            <div class="line system">Welcome to Lumen Node v0.1.0</div>
-            <div class="line system">Connected to Bitcoin Regtest.</div>
-            <div class="line system">Type 'help' for available commands.</div>
-        </div>
-
-        <div class="input-area">
-            <div class="prompt">></div>
-            <input type="text" id="cmdInput" placeholder="Enter command..." autofocus>
-        </div>
-
-        <div class="help-box">
-            <strong>Available Commands:</strong><br>
-            <span class="cmd">Transfer &lt;amount_sats&gt; &lt;to_l2_addr&gt;</span> - Send LBTC to another user<br>
-            <span class="cmd">Withdraw &lt;amount_sats&gt; &lt;btc_addr&gt;</span> - Burn LBTC and receive real BTC<br>
-            <span class="cmd">Faucet &lt;btc_addr&gt;</span> - Get 0.1 test BTC from miner<br>
-            <span class="cmd">refresh</span> - Force update balance data
+        
+        <div class="cmd-input-container">
+            <div class="prompt">user@l2:~$</div>
+            <input type="text" id="cmd" autofocus placeholder="Enter command here...">
         </div>
     </div>
 
     <script>
-        const term = document.getElementById('term');
-        const input = document.getElementById('cmdInput');
-        const myAddr = document.getElementById('myAddr').innerText;
+        const term = document.getElementById('terminal');
+        const input = document.getElementById('cmd');
+        const balanceEl = document.getElementById('balance');
+        const txCountEl = document.getElementById('tx-count');
 
-        function log(msg, type = 'system') {
+        function getTime() {
+            const now = new Date();
+            return now.toLocaleTimeString('en-US', { hour12: false });
+        }
+
+        function log(msg, color='#e0e0e0') {
             const div = document.createElement('div');
-            div.className = 'line ' + type;
-            div.innerText = msg;
+            div.className = 'log-entry';
+            div.innerHTML = `<span class="log-time">[${getTime()}]</span> <span style="color:${color}">${msg}</span>`;
             term.appendChild(div);
             term.scrollTop = term.scrollHeight;
         }
 
-        async function fetchState() {
+        async function postCmd(cmd) {
             try {
-                const res = await fetch('/api/state');
-                const data = await res.json();
-                const sats = data.balances[myAddr] || 0;
-                document.getElementById('bal').innerText = (sats / 100000000).toFixed(8);
-            } catch(e) {}
-        }
-
-        async function sendCommand(cmd) {
-            log('> ' + cmd, 'user');
-            
-            if (cmd === 'help') {
-                log('Commands: Transfer, Withdraw, Faucet, refresh');
-                return;
-            }
-            if (cmd === 'refresh') {
-                fetchState();
-                log('Data refreshed.');
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/send', {
+                await fetch('/api/cmd', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        sender: myAddr,
-                        instruction: cmd,
-                        signature: "dummy_sig"
-                    })
+                    body: JSON.stringify({ cmd: cmd })
                 });
-                if (res.ok) {
-                    log('Command sent to Mempool.', 'system');
-                    setTimeout(fetchState, 4000);
-                } else {
-                    log('Error sending command', 'error');
-                }
-            } catch (e) {
-                log('Network error: ' + e, 'error');
+            } catch(e) { log('Error connecting to node', 'red'); }
+        }
+
+        async function updateState() {
+            try {
+                let res = await fetch('/api/state');
+                let state = await res.json();
+                
+                // Анимация чисел
+                txCountEl.innerText = state.total_transactions;
+                
+                let myBal = state.balances['0xUser'] || 0;
+                balanceEl.innerText = myBal.toLocaleString() + ' sats';
+
+            } catch(e) { 
+                // Ignored
             }
         }
 
-        input.addEventListener('keydown', (e) => {
+        // Poll state every 2 seconds
+        setInterval(updateState, 2000);
+        updateState();
+
+        input.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
-                const cmd = input.value.trim();
-                if (cmd) sendCommand(cmd);
+                let val = input.value.trim();
+                if (!val) return;
+                
                 input.value = '';
+                log(`> ${val}`, '#888');
+
+                if (val.toLowerCase() === 'help') {
+                    log('Available Commands:', '#f2a900');
+                    log('  Me - Refresh balance');
+                    log('  Transfer 100 0xBob - Send L2 funds');
+                    log('  Withdraw 1000 mk... - Peg-out to Bitcoin L1');
+                } 
+                else if (val.toLowerCase() === 'me') {
+                    updateState();
+                    log('Balance updated.', 'var(--accent)');
+                }
+                else if (val.toLowerCase().startsWith('transfer')) {
+                    await postCmd(val);
+                    log('Transfer submitted to Mempool.', '#58a6ff');
+                }
+                else if (val.toLowerCase().startsWith('withdraw')) {
+                    await postCmd(val);
+                    log('Withdrawal request broadcasting...', '#ff3333');
+                }
+                else {
+                    log('Unknown command. Type "Help".', 'red');
+                }
             }
         });
-
-        fetchState();
-        setInterval(fetchState, 5000);
     </script>
 </body>
 </html>
-"#;
-
-#[derive(Deserialize)]
-struct TxRequest {
-    sender: String,
-    instruction: String,
-    signature: String,
-}
-
-pub async fn start_rpc_server(
-    mempool: Arc<Mutex<VecDeque<L2Transaction>>>, 
-    state: Arc<Mutex<AppState>>,
-) {
-    let app = Router::new()
-        .route("/wallet", get(wallet_handler))
-        .route("/api/state", get(state_handler))
-        .route("/api/send", post(send_handler))
-        .with_state((state, mempool));
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("🌍 Web Terminal running at: http://localhost:3000/wallet");
-    axum::serve(listener, app).await.unwrap();
-}
-
-async fn wallet_handler() -> Html<&'static str> {
-    Html(HTML_PAGE)
-}
-
-async fn state_handler(State((state, _)): State<(Arc<Mutex<AppState>>, Arc<Mutex<VecDeque<L2Transaction>>>)>) -> Json<AppState> {
-    let s = state.lock().unwrap();
-    Json(s.clone())
-}
-
-async fn send_handler(
-    State((_, mempool)): State<(Arc<Mutex<AppState>>, Arc<Mutex<VecDeque<L2Transaction>>>)>,
-    Json(payload): Json<TxRequest>,
-) -> Json<String> {
-    let mut mp = mempool.lock().unwrap();
-    
-    let sender = if payload.instruction.starts_with("Faucet") {
-         let parts: Vec<&str> = payload.instruction.split_whitespace().collect();
-         if parts.len() > 1 { parts[1].to_string() } else { payload.sender }
-    } else {
-        payload.sender
-    };
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    mp.push_back(L2Transaction {
-        sender: sender,
-        instruction: payload.instruction,
-        signature: payload.signature,
-        pubkey: "web_terminal_dummy_key".to_string(),
-        timestamp: timestamp,
-    });
-    Json("OK".to_string())
+    "#;
+    Html(html)
 }

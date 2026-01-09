@@ -1,159 +1,176 @@
 use std::sync::Arc;
 use std::time::Duration;
-use std::str::FromStr;
-use bitcoincore_rpc::{Auth, Client, RpcApi};
+use bitcoin::consensus::encode::serialize_hex;
 
 mod da_adapter;
 mod rpc;
 mod mempool;
 mod state;
 mod storage;
-mod bridge;
-mod spv;
+mod wallet;
+mod btc_api;
+mod withdraw;
+mod settlement;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
     
     println!("--------------------------------------------------");
-    println!("🚀 Lumen-btc-l2: Phase 6");
+    println!("🚀 Lumen-btc-l2: PHASE 6");
     println!("--------------------------------------------------");
 
+    let wallet = wallet::LocalWallet::load_or_generate("keypair.json");
+    let api_client = btc_api::BtcApi::new();
+    let my_address = wallet.address.clone();
+    
     let storage = Arc::new(storage::Storage::new("lumen_db"));
-    let saved = storage.load_state();
-    let app_state = state::init_state(saved); 
-
+    let saved_state = storage.load_state();
+    let app_state = state::init_state(saved_state); 
     let mempool = mempool::init_mempool();
-    let _da_layer = da_adapter::BitcoinDAAdapter::new("http://localhost:26659");
+    
+    let mut last_settlement_tx_count = app_state.lock().unwrap().total_transactions;
+    const SETTLEMENT_INTERVAL: u64 = 3; 
 
-    let btc_rpc = Client::new(
-        "http://127.0.0.1:18443",
-        Auth::UserPass("user".to_string(), "password".to_string()),
-    ).expect("Failed to connect to Bitcoin Core");
-
-    let bridge = bridge::BitcoinBridge::new(
-        "http://127.0.0.1:18443", 
-        Arc::clone(&app_state),
-        Arc::clone(&storage)
-    );
-
-    let rpc_mempool = Arc::clone(&mempool);
     let rpc_state = Arc::clone(&app_state);
+    let rpc_mempool = Arc::clone(&mempool);
     tokio::spawn(async move {
-        rpc::start_rpc_server(rpc_mempool, rpc_state).await;
+        println!("🌍 Web Terminal running at: http://localhost:3000/wallet");
+        rpc::run_server(rpc_state, rpc_mempool).await;
     });
 
-    {
-        let s = app_state.lock().unwrap();
-        println!("🧠 VM Ready. Accounts: {}", s.balances.len());
-    }
+    println!("🟢 Node running. Settlement interval: every {} txs", SETTLEMENT_INTERVAL);
 
     loop {
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        
-        bridge.sync();
+        match api_client.get_utxos(&my_address).await {
+            Ok(utxos) => {
+                let mut state = app_state.lock().unwrap();
+                let mut state_changed = false;
 
-        let mut q = mempool.lock().unwrap();
-        if !q.is_empty() {
-            println!("⚡ Processing batch of {} commands...", q.len());
-            
-            let mut state = app_state.lock().unwrap();
-            let mut save_needed = false;
-
-            for tx in q.iter() {
-                state.total_transactions += 1;
-                let parts: Vec<&str> = tx.instruction.split_whitespace().collect();
-                
-                if parts.is_empty() { continue; }
-
-                match parts[0] {
-                    "Transfer" => {
-                        if parts.len() >= 3 {
-                            if let Ok(amount) = parts[1].parse::<u64>() {
-                                let sender = &tx.sender;
-                                let recipient = parts[2];
-                                let sender_bal = state.balances.entry(sender.clone()).or_insert(0);
-                                
-                                if *sender_bal >= amount {
-                                    *sender_bal -= amount;
-                                    *state.balances.entry(recipient.to_string()).or_insert(0) += amount;
-                                    println!("💸 TRANSFER: {} sats from {} to {}", amount, sender, recipient);
-                                    save_needed = true;
-                                } else {
-                                    println!("⛔ Transfer failed: Insufficient funds for {}", sender);
-                                }
-                            }
-                        }
-                    },
-                    "Withdraw" => {
-                        if parts.len() >= 3 {
-                            if let Ok(amount) = parts[1].parse::<u64>() {
-                                let sender = &tx.sender;
-                                let btc_addr_str = parts[2]; 
-                                let sender_bal = state.balances.entry(sender.clone()).or_insert(0);
-
-                                if *sender_bal >= amount {
-                                    let btc_address = match bitcoincore_rpc::bitcoin::Address::from_str(btc_addr_str) {
-                                        Ok(addr) => addr.assume_checked(),
-                                        Err(e) => {
-                                            println!("⛔ Invalid BTC Address '{}': {}", btc_addr_str, e);
-                                            continue;
-                                        }
-                                    };
-
-                                    *sender_bal -= amount;
-                                    save_needed = true;
-
-                                    let btc_val = amount as f64 / 100_000_000.0;
-                                    
-                                    match btc_rpc.send_to_address(
-                                        &btc_address,
-                                        bitcoincore_rpc::bitcoin::Amount::from_btc(btc_val).unwrap(),
-                                        None, None, None, None, None, None
-                                    ) {
-                                        Ok(txid) => println!("📤 WITHDRAW SUCCESS: Sent {} BTC to {}. TxId: {}", btc_val, btc_addr_str, txid),
-                                        Err(e) => {
-                                            println!("⚠️ WITHDRAW FAILED (Refunded): {}", e);
-                                            *sender_bal += amount; 
-                                        }
-                                    }
-                                } else {
-                                    println!("⛔ Withdraw failed: Insufficient funds");
-                                }
-                            }
-                        }
-                    },
-                    "Faucet" => {
-                        let target_btc_addr_str = if parts.len() > 1 { parts[1] } else { &tx.sender };
-                        let faucet_amount = 0.1;
-
-                        let btc_address = match bitcoincore_rpc::bitcoin::Address::from_str(target_btc_addr_str) {
-                            Ok(addr) => addr.assume_checked(),
-                            Err(e) => {
-                                println!("⛔ Invalid Faucet Address '{}': {}", target_btc_addr_str, e);
-                                continue;
-                            }
-                        };
-                        
-                        match btc_rpc.send_to_address(
-                            &btc_address,
-                            bitcoincore_rpc::bitcoin::Amount::from_btc(faucet_amount).unwrap(),
-                            None, None, None, None, None, None
-                        ) {
-                             Ok(txid) => println!("🚰 FAUCET: Sent {} BTC to {}. TxId: {}", faucet_amount, target_btc_addr_str, txid),
-                             Err(e) => println!("⚠️ Faucet Error: {}", e),
-                        }
-                    },
-                    _ => println!("❓ Unknown command: {}", parts[0]),
+                for utxo in utxos {
+                    if !state.processed_txs.contains(&utxo.txid) {
+                        println!("✅ DEPOSIT: {} sats (Tx: {})", utxo.value, utxo.txid);
+                        state.processed_txs.insert(utxo.txid.clone());
+                        let user = "0xUser".to_string();
+                        let old_bal = *state.balances.get(&user).unwrap_or(&0);
+                        state.balances.insert(user.clone(), old_bal + utxo.value);
+                        state_changed = true;
+                    }
+                }
+                if state_changed {
+                    drop(state);
+                    storage.save_state(&app_state.lock().unwrap()).ok();
                 }
             }
-
-            if save_needed {
-                let _ = storage.save_state(&state);
-                println!("💾 State saved.");
-            }
-
-            q.clear();
+            Err(_) => {}
         }
+
+        {
+            let mut mp = mempool.lock().unwrap();
+            while let Some(cmd) = mp.queue.pop_front() {
+                println!("⚙️ Processing: {}", cmd);
+                let parts: Vec<&str> = cmd.split_whitespace().collect();
+                
+                let mut tx_success = false;
+
+                if parts.len() == 3 && parts[0].eq_ignore_ascii_case("Transfer") {
+                    if let Ok(amount) = parts[1].parse::<u64>() {
+                        let recipient = parts[2].to_string();
+                        let sender = "0xUser".to_string();
+                        let mut state = app_state.lock().unwrap();
+                        let sender_bal = *state.balances.get(&sender).unwrap_or(&0);
+
+                        if sender_bal >= amount {
+                            state.balances.insert(sender.clone(), sender_bal - amount);
+                            let r_bal = *state.balances.get(&recipient).unwrap_or(&0);
+                            state.balances.insert(recipient.clone(), r_bal + amount);
+                            state.total_transactions += 1;
+                            println!("✅ L2 TRANSFER: {} -> {}", amount, recipient);
+                            storage.save_state(&state).ok();
+                            tx_success = true;
+                        } else {
+                            println!("❌ TRANSFER FAILED: Insufficient funds");
+                        }
+                    }
+                }
+                else if parts.len() == 3 && parts[0].eq_ignore_ascii_case("Withdraw") {
+                    if let Ok(amount) = parts[1].parse::<u64>() {
+                        let btc_addr = parts[2].to_string();
+                        let sender = "0xUser".to_string();
+                        let mut state = app_state.lock().unwrap();
+                        let sender_bal = *state.balances.get(&sender).unwrap_or(&0);
+
+                        if sender_bal >= amount {
+                            println!("⏳ Withdrawing {}...", amount);
+                            drop(state); 
+                            
+                            match api_client.get_utxos(&my_address).await {
+                                Ok(utxos) => {
+                                    match withdraw::create_withdrawal_tx(&wallet, utxos, btc_addr, amount) {
+                                        Ok(tx) => {
+                                            let txid_res = api_client.broadcast_tx(serialize_hex(&tx)).await;
+                                            match txid_res {
+                                                Ok(txid) => {
+                                                    println!("🚀 WITHDRAW SENT: {}", txid);
+                                                    let mut state = app_state.lock().unwrap();
+                                                    state.processed_txs.insert(txid);
+                                                    state.balances.insert(sender.clone(), sender_bal - amount);
+                                                    state.total_transactions += 1;
+                                                    storage.save_state(&state).ok();
+                                                    tx_success = true;
+                                                }
+                                                Err(e) => println!("❌ BROADCAST FAILED: {}", e),
+                                            }
+                                        }
+                                        Err(e) => println!("❌ TX BUILD ERROR: {}", e),
+                                    }
+                                }
+                                Err(e) => println!("❌ API ERROR: {}", e),
+                            }
+                        }
+                    }
+                }
+                
+                if tx_success {
+                    let state = app_state.lock().unwrap();
+                    let current_txs = state.total_transactions;
+                    drop(state);
+
+                    if current_txs - last_settlement_tx_count >= SETTLEMENT_INTERVAL {
+                        println!("🔒 Triggering L1 Settlement ({} txs since last)...", current_txs - last_settlement_tx_count);
+                        
+                        let state_read = app_state.lock().unwrap();
+                        let state_hash = settlement::hash_state(&state_read.balances);
+                        drop(state_read);
+                        
+                        println!("#️⃣ State Hash: {}", state_hash);
+
+                        match api_client.get_utxos(&my_address).await {
+                            Ok(utxos) => {
+                                match settlement::create_settlement_tx(&wallet, utxos, state_hash) {
+                                    Ok(tx) => {
+                                        match api_client.broadcast_tx(serialize_hex(&tx)).await {
+                                            Ok(txid) => {
+                                                println!("🏛️ SETTLEMENT CONFIRMED! Tx: {}", txid);
+                                                println!("🔗 Proof of State stored in Bitcoin Testnet.");
+                                                
+                                                last_settlement_tx_count = current_txs;
+                                                let mut state = app_state.lock().unwrap();
+                                                state.processed_txs.insert(txid);
+                                            }
+                                            Err(e) => println!("❌ SETTLEMENT FAILED: {}", e),
+                                        }
+                                    }
+                                    Err(e) => println!("❌ SETTLEMENT BUILD ERROR: {}", e),
+                                }
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
     }
 }
