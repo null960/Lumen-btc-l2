@@ -1,5 +1,6 @@
 /target
 /lumen_db
+/lumen_da
 keypair.json
 *.log
 .DS_Store

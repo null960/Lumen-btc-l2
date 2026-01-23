@@ -83,7 +83,7 @@ pub fn create_withdrawal_tx(
     
     let pub_key = private_key.public_key(&secp);
 
-    let mut sighash_cache = SighashCache::new(&tx);
+    let sighash_cache = SighashCache::new(&tx);
     let mut signatures = Vec::new();
 
     for (i, _input) in tx.input.iter().enumerate() {

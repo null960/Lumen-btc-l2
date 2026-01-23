@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "node",
-    "cli"
 ]
 resolver = "2"
 

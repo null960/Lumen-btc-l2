@@ -71,7 +71,7 @@ On the first launch, the node will create a keypair.json file and output your OP
 
 1. Copy your address from the terminal.
 
-2. Use any faucet (for example, [coinfaucet.eu] (https://coinfaucet.eu/en/btc-testnet/)) to receive test coins.
+2. Use any faucet (for example, [coinfaucet.eu](https://coinfaucet.eu/en/btc-testnet/)) to receive test coins.
 
 3. As soon as the transaction appears on the network, the node will automatically detect it and credit your balance.
 
