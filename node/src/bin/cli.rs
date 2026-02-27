@@ -1,7 +1,9 @@
+// Imports
 use clap::{Parser, Subcommand};
 use serde_json::json;
 use reqwest::Client;
 
+// Struct
 #[derive(Parser)]
 #[command(name = "Lumen CLI", version = "0.1.0")]
 struct Cli {
@@ -9,6 +11,7 @@ struct Cli {
     command: Commands,
 }
 
+// Enum
 #[derive(Subcommand)]
 enum Commands {
     /// Info
