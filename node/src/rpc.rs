@@ -1,3 +1,4 @@
+// Imports
 use axum::{
     routing::{get, post},
     Router, 
@@ -9,9 +10,10 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use crate::state::AppState;
 use crate::NetworkEvent;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 
+// State
 #[derive(Clone)]
 pub struct ServerState {
     pub app_state: Arc<Mutex<AppState>>,
@@ -19,11 +21,29 @@ pub struct ServerState {
     pub operator_address: String,
 }
 
+// Struct
 #[derive(Deserialize, Debug)]
 pub struct FaucetRequest {
     pub address: Option<String>,
 }
 
+// Struct
+#[derive(Deserialize, Debug)]
+pub struct UserCommand {
+    pub cmd: String,
+    pub sig: Option<String>,
+    pub pubkey: Option<String>,
+}
+
+// Struct
+#[derive(Deserialize, Debug)]
+pub struct TransferRequest {
+    pub from: String,
+    pub to: String,
+    pub amount: u64,
+}
+
+// Server
 pub async fn run_server(
     state: Arc<Mutex<AppState>>, 
     tx_channel: mpsc::Sender<NetworkEvent>, 
@@ -40,6 +60,7 @@ pub async fn run_server(
         .route("/status", get(get_status))
         .route("/faucet", post(request_faucet))
         .route("/balance/:address", get(get_user_balance))
+        .route("/transfer", post(request_transfer))
         .route("/api/state", get(get_state))
         .route("/api/cmd", post(submit_command))
         .route("/api/proof/:address", get(get_proof))
@@ -50,17 +71,18 @@ pub async fn run_server(
     axum::serve(listener, app).await.unwrap();
 }
 
+// Status
 async fn get_status() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok", "network": "Lumen-Alpha-Testnet" }))
 }
 
+// Faucet
 async fn request_faucet(
     State(state): State<ServerState>,
     Json(payload): Json<FaucetRequest>,
 ) -> Json<serde_json::Value> {
     let target_addr = payload.address.unwrap_or_else(|| "LumenUser_New".to_string());
     
-    // Формируем команду для очереди транзакций
     let cmd = format!("Faucet {}", target_addr);
     let event = NetworkEvent::Transaction(format!("SIGNED_CMD|{}|faucet_sig|system", cmd));
     
@@ -75,6 +97,7 @@ async fn request_faucet(
     }
 }
 
+// Balance
 async fn get_user_balance(
     State(state): State<ServerState>,
     Path(address): Path<String>,
@@ -86,6 +109,20 @@ async fn get_user_balance(
     format!("{} BTC", bal)
 }
 
+// Transfer
+async fn request_transfer(
+    State(state): State<ServerState>,
+    Json(payload): Json<TransferRequest>,
+) -> Json<serde_json::Value> {
+    let cmd = format!("Transfer {} {} BTC", payload.amount, payload.to);
+    let event = NetworkEvent::Transaction(format!("SIGNED_CMD|{}|cli_test_sig|{}", cmd, payload.from));
+    match state.tx_channel.send(event).await {
+        Ok(_) => Json(json!({ "status": "success", "msg": "Transfer submitted" })),
+        Err(_) => Json(json!({ "status": "error", "msg": "Node busy" })),
+    }
+}
+
+// Command
 async fn submit_command(
     State(state): State<ServerState>,
     Json(payload): Json<UserCommand>,
@@ -107,6 +144,7 @@ async fn submit_command(
     }
 }
 
+// State
 async fn get_state(State(state): State<ServerState>) -> Json<serde_json::Value> {
     let app_state = state.app_state.lock().unwrap();
     
@@ -130,6 +168,7 @@ async fn get_state(State(state): State<ServerState>) -> Json<serde_json::Value> 
     }))
 }
 
+// Proof
 async fn get_proof(
     State(state): State<ServerState>,
     Path(address): Path<String>,
@@ -157,6 +196,7 @@ async fn get_proof(
     }
 }
 
+// UI
 async fn wallet_ui() -> impl IntoResponse {
     const HTML: &str = include_str!("../frontend/index.html");
     Html(HTML)

@@ -11,16 +11,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Show node and connection status
+    /// Info
     Info,
-    /// Request faucet funds (optionally for a specific address)
+    /// Faucet
     Faucet { address: Option<String> },
-    /// Check balance of an address
+    /// Balance
     Balance { address: String },
-    /// Transfer funds between accounts
+    /// Transfer
     Transfer { from: String, to: String, amount: u64 },
 }
 
+// Main
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -41,24 +42,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("--------------------------------------------------");
         }
         Commands::Faucet { address } => {
+            println!("⏳ Requesting funds from faucet...");
             let res = client.post(format!("{}/faucet", rpc_url))
                 .json(&json!({ "address": address }))
                 .send()
                 .await?;
-            println!("📡 Server Response: {}", res.text().await?);
+            
+            if res.status().is_success() {
+                let json: serde_json::Value = res.json().await?;
+                println!("✅ Success!");
+                println!("💳 Address: {}", json["address"].as_str().unwrap_or(""));
+                println!("💰 Amount: {} LUM", json["amount"].as_u64().unwrap_or(0));
+                println!("📝 Message: {}", json["msg"].as_str().unwrap_or(""));
+            } else {
+                println!("❌ Faucet request failed: {}", res.status());
+            }
         }
         Commands::Balance { address } => {
             let res = client.get(format!("{}/balance/{}", rpc_url, address))
                 .send()
                 .await?;
-            println!("💰 Balance for {}: {}", address, res.text().await?);
+            println!("🏦 Balance for {}: {}", address, res.text().await?);
         }
         Commands::Transfer { from, to, amount } => {
+            println!("⏳ Initiating transfer...");
             let res = client.post(format!("{}/transfer", rpc_url))
                 .json(&json!({ "from": from, "to": to, "amount": amount }))
                 .send()
                 .await?;
-            println!("📝 Transfer Result: {}", res.text().await?);
+            
+            if res.status().is_success() {
+                let json: serde_json::Value = res.json().await?;
+                println!("✅ Transfer Response: {}", json["msg"].as_str().unwrap_or(""));
+            } else {
+                println!("❌ Transfer failed: {}", res.status());
+            }
         }
     }
     Ok(())
