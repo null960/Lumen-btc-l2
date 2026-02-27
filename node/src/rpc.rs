@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use crate::state::AppState;
 use crate::NetworkEvent;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Clone)]
@@ -20,10 +20,8 @@ pub struct ServerState {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct UserCommand {
-    pub cmd: String,
-    pub sig: Option<String>,
-    pub pubkey: Option<String>,
+pub struct FaucetRequest {
+    pub address: Option<String>,
 }
 
 pub async fn run_server(
@@ -39,14 +37,53 @@ pub async fn run_server(
 
     let app = Router::new()
         .route("/", get(wallet_ui)) 
+        .route("/status", get(get_status))
+        .route("/faucet", post(request_faucet))
+        .route("/balance/:address", get(get_user_balance))
         .route("/api/state", get(get_state))
         .route("/api/cmd", post(submit_command))
         .route("/api/proof/:address", get(get_proof))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("🌍 Local Server running at http://localhost:3000");
+    println!("🌍 Remote RPC Server running at http://0.0.0.0:3000");
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn get_status() -> Json<serde_json::Value> {
+    Json(json!({ "status": "ok", "network": "Lumen-Alpha-Testnet" }))
+}
+
+async fn request_faucet(
+    State(state): State<ServerState>,
+    Json(payload): Json<FaucetRequest>,
+) -> Json<serde_json::Value> {
+    let target_addr = payload.address.unwrap_or_else(|| "LumenUser_New".to_string());
+    
+    // Формируем команду для очереди транзакций
+    let cmd = format!("Faucet {}", target_addr);
+    let event = NetworkEvent::Transaction(format!("SIGNED_CMD|{}|faucet_sig|system", cmd));
+    
+    match state.tx_channel.send(event).await {
+        Ok(_) => Json(json!({ 
+            "status": "success", 
+            "address": target_addr, 
+            "amount": 1000,
+            "msg": "Funds queued for delivery" 
+        })),
+        Err(_) => Json(json!({ "status": "error", "msg": "Node busy" })),
+    }
+}
+
+async fn get_user_balance(
+    State(state): State<ServerState>,
+    Path(address): Path<String>,
+) -> String {
+    let app_state = state.app_state.lock().unwrap();
+    let bal = app_state.balances.get(&address)
+        .and_then(|b| b.get("BTC"))
+        .unwrap_or(&0);
+    format!("{} BTC", bal)
 }
 
 async fn submit_command(
