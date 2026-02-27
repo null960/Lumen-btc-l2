@@ -1,124 +1,152 @@
-use bitcoin::blockdata::script::Builder;
-use bitcoin::hash_types::Txid;
-use bitcoin::secp256k1::{Message, Secp256k1};
-use bitcoin::hashes::{Hash, sha256};
-use bitcoin::script::PushBytesBuf;
-use bitcoin::sighash::{SighashCache, EcdsaSighashType};
-use bitcoin::absolute::LockTime;
-use bitcoin::opcodes;
-use bitcoin::{
-    OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Sequence, PrivateKey
-};
-use std::str::FromStr;
-use std::error::Error;
+use bitcoin::hashes::{sha256, Hash, HashEngine};
 use std::collections::HashMap;
 use crate::wallet::LocalWallet;
 use crate::btc_api::Utxo;
+use bitcoin::{Transaction, TxIn, TxOut, OutPoint, ScriptBuf, Sequence, Witness, PrivateKey};
+use bitcoin::blockdata::script::Builder;
+use bitcoin::opcodes;
+use bitcoin::sighash::{SighashCache, EcdsaSighashType};
+use bitcoin::secp256k1::{Secp256k1, Message};
+use bitcoin::script::PushBytesBuf;
+use std::str::FromStr;
 
-const FEE_SATS: u64 = 500;
+fn hash_leaf(address: &str, balance: u64) -> [u8; 32] {
+    let mut engine = sha256::Hash::engine();
+    engine.input(address.as_bytes());
+    engine.input(&balance.to_le_bytes());
+    sha256::Hash::from_engine(engine).to_byte_array()
+}
 
-pub fn hash_state(balances: &HashMap<String, u64>) -> String {
-    let mut users: Vec<_> = balances.keys().collect();
-    users.sort();
+fn hash_node(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+    let mut engine = sha256::Hash::engine();
+    engine.input(left);
+    engine.input(right);
+    sha256::Hash::from_engine(engine).to_byte_array()
+}
 
-    let mut raw_data = String::new();
-    for user in users {
-        let bal = balances.get(user).unwrap();
-        raw_data.push_str(&format!("{}:{}|", user, bal));
+pub fn build_merkle_root(balances: &HashMap<String, u64>) -> String {
+    if balances.is_empty() {
+        return sha256::Hash::hash(b"empty").to_string();
     }
 
-    let hash = sha256::Hash::hash(raw_data.as_bytes());
-    hash.to_string()
+    let mut keys: Vec<_> = balances.keys().collect();
+    keys.sort();
+
+    let mut leaves: Vec<[u8; 32]> = keys.into_iter().map(|k| {
+        hash_leaf(k, *balances.get(k).unwrap())
+    }).collect();
+
+    while leaves.len() > 1 {
+        let mut next_level = Vec::new();
+        for chunk in leaves.chunks(2) {
+            if chunk.len() == 2 {
+                next_level.push(hash_node(&chunk[0], &chunk[1]));
+            } else {
+                next_level.push(hash_node(&chunk[0], &chunk[0]));
+            }
+        }
+        leaves = next_level;
+    }
+    
+    sha256::Hash::from_byte_array(leaves[0]).to_string()
+}
+
+pub fn generate_merkle_proof(balances: &HashMap<String, u64>, target_addr: &str) -> Option<Vec<(String, bool)>> {
+    if !balances.contains_key(target_addr) { return None; }
+    
+    let mut keys: Vec<_> = balances.keys().collect();
+    keys.sort();
+
+    let mut leaves: Vec<[u8; 32]> = keys.iter().map(|k| {
+        hash_leaf(k, *balances.get(*k).unwrap())
+    }).collect();
+
+    let mut target_idx = keys.iter().position(|&k| k == target_addr)?;
+    let mut proof = Vec::new();
+
+    while leaves.len() > 1 {
+        let mut next_level = Vec::new();
+        for i in (0..leaves.len()).step_by(2) {
+            let left = leaves[i];
+            let right = if i + 1 < leaves.len() { leaves[i+1] } else { leaves[i] };
+
+            if i == target_idx {
+                proof.push((sha256::Hash::from_byte_array(right).to_string(), false));
+            } else if i + 1 == target_idx {
+                proof.push((sha256::Hash::from_byte_array(left).to_string(), true));
+            }
+
+            next_level.push(hash_node(&left, &right));
+        }
+        target_idx /= 2;
+        leaves = next_level;
+    }
+    
+    Some(proof)
 }
 
 pub fn create_settlement_tx(
     wallet: &LocalWallet,
     utxos: Vec<Utxo>,
-    state_hash: String,
-) -> Result<Transaction, Box<dyn Error>> {
-    
+    state_root_hash: String,
+) -> Result<Transaction, Box<dyn std::error::Error + Send + Sync>> {
     let secp = Secp256k1::new();
-    let my_address = wallet.get_address_obj();
+    let my_addr = wallet.get_address_obj();
+    let fee = 1000;
 
-    let data_bytes = state_hash.as_bytes();
-    let safe_len = std::cmp::min(data_bytes.len(), 80);
-    
-    let push_data = PushBytesBuf::try_from(data_bytes[..safe_len].to_vec())?;
-
+    let op_return_data = PushBytesBuf::try_from(state_root_hash.as_bytes()[..32].to_vec())?;
     let op_return_script = Builder::new()
         .push_opcode(opcodes::all::OP_RETURN)
-        .push_slice(&push_data)
+        .push_slice(&op_return_data)
         .into_script();
 
-    let mut inputs: Vec<TxIn> = Vec::new();
-    let mut total_input: u64 = 0;
-    
+    let mut inputs = Vec::new();
+    let mut total_in = 0;
+
     for utxo in utxos {
-        total_input += utxo.value;
-        let txid = Txid::from_str(&utxo.txid)?;
+        total_in += utxo.value;
         inputs.push(TxIn {
-            previous_output: OutPoint::new(txid, utxo.vout),
-            script_sig: ScriptBuf::new(), 
+            previous_output: OutPoint::new(bitcoin::Txid::from_str(&utxo.txid)?, utxo.vout),
+            script_sig: ScriptBuf::new(),
             sequence: Sequence::MAX,
-            witness: bitcoin::Witness::new(),
+            witness: Witness::new(),
         });
-        if total_input >= FEE_SATS { break; }
+        if total_in >= fee { break; }
     }
 
-    if total_input < FEE_SATS {
-        return Err("Insufficient funds for Settlement Fee".into());
+    let mut outputs = vec![TxOut { value: 0, script_pubkey: op_return_script }];
+    if total_in > fee + 546 {
+        outputs.push(TxOut { value: total_in - fee, script_pubkey: my_addr.script_pubkey() });
     }
 
-    let mut outputs = Vec::new();
-
-    outputs.push(TxOut {
-        value: 0,
-        script_pubkey: op_return_script,
-    });
-
-    let change = total_input - FEE_SATS;
-    if change > 546 {
-        outputs.push(TxOut {
-            value: change,
-            script_pubkey: my_address.script_pubkey(),
-        });
-    }
-
-    let mut tx = Transaction {
-        version: 2,
-        lock_time: LockTime::ZERO,
-        input: inputs,
-        output: outputs,
+    let mut tx = Transaction { 
+        version: 2, 
+        lock_time: bitcoin::absolute::LockTime::ZERO, 
+        input: inputs, 
+        output: outputs 
     };
 
-    let private_key = PrivateKey::from_str(&wallet.secret_wif)?;
-    let secret_key = private_key.inner;
-    let pub_key = private_key.public_key(&secp);
+    let priv_key = PrivateKey::from_wif(&wallet.secret_wif)?;
+    let prev_script = my_addr.script_pubkey();
 
-    let sighash_cache = SighashCache::new(&tx);
     let mut signatures = Vec::new();
-
-    for (i, _input) in tx.input.iter().enumerate() {
-        let prev_script = my_address.script_pubkey();
-        let sighash = sighash_cache.legacy_signature_hash(
-            i, &prev_script, EcdsaSighashType::All.to_u32()
-        )?;
-        
-        let msg = Message::from_slice(sighash.as_byte_array())?;
-        let signature = secp.sign_ecdsa(&msg, &secret_key);
-
-        let mut sig_with_hashtype = signature.serialize_der().to_vec();
-        sig_with_hashtype.push(EcdsaSighashType::All as u8);
-        signatures.push(sig_with_hashtype);
+    {
+        let sighash_cache = SighashCache::new(&tx);
+        for i in 0..tx.input.len() {
+            let msg_hash = sighash_cache.legacy_signature_hash(i, &prev_script, EcdsaSighashType::All as u32)?;
+            let msg = Message::from_slice(msg_hash.as_byte_array())?;
+            let sig = secp.sign_ecdsa(&msg, &priv_key.inner);
+            let mut sig_der = sig.serialize_der().to_vec();
+            sig_der.push(EcdsaSighashType::All as u8);
+            signatures.push(sig_der);
+        }
     }
 
-    for (i, sig_bytes) in signatures.into_iter().enumerate() {
-        let sig_push = PushBytesBuf::try_from(sig_bytes)?;
-        let pub_key_push = PushBytesBuf::try_from(pub_key.to_bytes().to_vec())?;
-        
+    let pubkey_bytes = priv_key.public_key(&secp).to_bytes();
+    for (i, sig_der) in signatures.into_iter().enumerate() {
         tx.input[i].script_sig = Builder::new()
-            .push_slice(&sig_push)
-            .push_slice(&pub_key_push)
+            .push_slice(&PushBytesBuf::try_from(sig_der)?)
+            .push_slice(&PushBytesBuf::try_from(pubkey_bytes.to_vec())?)
             .into_script();
     }
 

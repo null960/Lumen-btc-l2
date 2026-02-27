@@ -10,18 +10,6 @@ pub struct BtcApi {
     client: Client,
 }
 
-#[derive(Deserialize, Debug)]
-struct AddressStats {
-    chain_stats: Stats,
-    mempool_stats: Stats,
-}
-
-#[derive(Deserialize, Debug)]
-struct Stats {
-    funded_txo_sum: u64,
-    spent_txo_sum: u64,
-}
-
 #[derive(Deserialize, Debug, Clone)]
 pub struct Utxo {
     pub txid: String,
@@ -35,6 +23,8 @@ pub struct UtxoStatus {
     pub confirmed: bool,
 }
 
+pub type ApiResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
+
 impl BtcApi {
     pub fn new() -> Self {
         Self {
@@ -45,25 +35,45 @@ impl BtcApi {
         }
     }
 
-    pub async fn get_utxos(&self, address: &str) -> Result<Vec<Utxo>, Box<dyn Error>> {
+    /// Fetches Unspent Transaction Outputs for an address
+    pub async fn get_utxos(&self, address: &str) -> ApiResult<Vec<Utxo>> {
         let url = format!("{}/address/{}/utxo", API_BASE, address);
-        let resp = self.client.get(&url).send().await?;
+        
+        let resp = self.client.get(&url)
+            .send()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+        
         if !resp.status().is_success() {
             return Err(format!("API Error: {}", resp.status()).into());
         }
-        let utxos: Vec<Utxo> = resp.json().await?;
+        
+        let utxos: Vec<Utxo> = resp.json()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+            
         Ok(utxos)
     }
 
-    pub async fn broadcast_tx(&self, tx_hex: String) -> Result<String, Box<dyn Error>> {
+    /// Broadcasts a raw transaction hex to the network
+    pub async fn broadcast_tx(&self, tx_hex: String) -> ApiResult<String> {
         let url = format!("{}/tx", API_BASE);
-        let resp = self.client.post(&url).body(tx_hex).send().await?;
+        
+        let resp = self.client.post(&url)
+            .body(tx_hex)
+            .send()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
         
         if resp.status().is_success() {
-            let txid = resp.text().await?;
+            let txid = resp.text()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
             Ok(txid)
         } else {
-            let err_text = resp.text().await?;
+            let err_text = resp.text()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
             Err(format!("Broadcast failed: {}", err_text).into())
         }
     }

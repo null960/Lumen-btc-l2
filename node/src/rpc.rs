@@ -3,7 +3,7 @@ use axum::{
     Router, 
     Json, 
     response::{Html, IntoResponse}, 
-    extract::State,
+    extract::{State, Path},
 };
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -41,6 +41,7 @@ pub async fn run_server(
         .route("/", get(wallet_ui)) 
         .route("/api/state", get(get_state))
         .route("/api/cmd", post(submit_command))
+        .route("/api/proof/:address", get(get_proof))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -71,12 +72,52 @@ async fn submit_command(
 
 async fn get_state(State(state): State<ServerState>) -> Json<serde_json::Value> {
     let app_state = state.app_state.lock().unwrap();
+    
+    let tokens_info: Vec<serde_json::Value> = app_state.tokens.iter().map(|(ticker, meta)| {
+        json!({
+            "ticker": ticker,
+            "name": meta.name,
+            "supply": meta.supply,
+            "issuer": meta.issuer,
+            "description": meta.description
+        })
+    }).collect();
+
     Json(json!({
         "total_transactions": app_state.total_transactions,
         "balances": app_state.balances,
+        "tokens": tokens_info,
         "history": app_state.history,
-        "operator": state.operator_address
+        "operator": state.operator_address,
+        "latest_state_root": app_state.latest_state_root 
     }))
+}
+
+async fn get_proof(
+    State(state): State<ServerState>,
+    Path(address): Path<String>,
+) -> Json<serde_json::Value> {
+    let app_state = state.app_state.lock().unwrap();
+    
+    let mut btc_balances = std::collections::HashMap::new();
+    for (user, bals) in &app_state.balances {
+        if let Some(amt) = bals.get("BTC") {
+            btc_balances.insert(user.clone(), *amt);
+        }
+    }
+
+    if let Some(proof) = crate::settlement::generate_merkle_proof(&btc_balances, &address) {
+        let bal = btc_balances.get(&address).unwrap_or(&0);
+        Json(json!({ 
+            "status": "ok", 
+            "address": address, 
+            "balance": bal, 
+            "proof": proof, 
+            "root": app_state.latest_state_root 
+        }))
+    } else {
+        Json(json!({ "status": "error", "msg": "Address not found or no BTC balance" }))
+    }
 }
 
 async fn wallet_ui() -> impl IntoResponse {

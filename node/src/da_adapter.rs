@@ -4,6 +4,10 @@ use std::error::Error;
 use bitcoin::hashes::{sha256, Hash}; 
 use crate::state::TxRecord;
 
+pub trait DataAvailabilityLayer: Send + Sync {
+    fn submit_batch(&self, batch_id: u64, txs: &Vec<TxRecord>) -> Result<String, Box<dyn Error + Send + Sync>>;
+}
+
 pub struct BitcoinDAAdapter {
     storage_path: String,
 }
@@ -17,15 +21,17 @@ impl BitcoinDAAdapter {
             storage_path: storage_path.to_string(),
         }
     }
+}
 
-    pub fn submit_batch(&self, batch_id: u64, txs: &Vec<TxRecord>) -> Result<String, Box<dyn Error>> {
-        let json_data = serde_json::to_string(txs)?;
+impl DataAvailabilityLayer for BitcoinDAAdapter {
+    fn submit_batch(&self, batch_id: u64, txs: &Vec<TxRecord>) -> Result<String, Box<dyn Error + Send + Sync>> {
+        let json_data = serde_json::to_string(txs).map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
         let hash = sha256::Hash::hash(json_data.as_bytes());
         let hash_hex = hash.to_string();
 
         let filename = format!("{}/batch_{}_{}.json", self.storage_path, batch_id, hash_hex);
-        fs::write(&filename, json_data)?;
+        fs::write(&filename, json_data).map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
         println!("📦 [DA Layer] Batch #{} saved to {}", batch_id, filename);
         Ok(hash_hex)

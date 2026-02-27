@@ -4,248 +4,88 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lumen L2 Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
-        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
-        
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding: 20px 0; margin-bottom: 30px; }
-        .logo { font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -1px; }
-        .logo span { color: #f7931a; }
-        .status { font-size: 12px; color: #00ff00; display: flex; align-items: center; gap: 6px; }
-        
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .card { background: #141414; border: 1px solid #333; padding: 20px; border-radius: 8px; }
-        .card-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-        .card-value { font-size: 18px; font-family: 'Courier New', monospace; word-break: break-all; }
-        
-        button { background: #222; color: #fff; border: 1px solid #444; padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: 600; transition: all 0.2s; }
-        button:hover { background: #333; border-color: #666; }
-        button.primary { background: #f7931a; border-color: #f7931a; color: #000; }
-        button.primary:hover { background: #e68b19; }
-        
-        button.faucet-btn { background: #0066cc; border-color: #0066cc; color: #fff; display: none; }
-        button.faucet-btn:hover { background: #0055aa; }
-
-        .input-group { display: flex; gap: 10px; background: #141414; padding: 10px; border: 1px solid #333; border-radius: 8px; margin-bottom: 10px; }
-        input { flex: 1; background: transparent; border: none; color: #fff; font-size: 16px; outline: none; font-family: monospace; }
-
-        .help-box { font-size: 13px; color: #666; margin-bottom: 30px; display: flex; gap: 10px; align-items: center; }
-        .cmd-chip { 
-            background: #1a1a1a; 
-            border: 1px solid #333; 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            font-family: monospace; 
-            color: #aaa; 
-            cursor: pointer; 
-            transition: 0.2s;
-        }
-        .cmd-chip:hover { border-color: #f7931a; color: #fff; }
-        .cmd-desc { color: #f7931a; font-weight: bold; }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th { text-align: left; color: #666; font-size: 12px; padding: 12px; border-bottom: 1px solid #333; }
-        td { padding: 12px; border-bottom: 1px solid #222; font-size: 14px; }
-        tr:hover { background: #1a1a1a; }
-        
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .badge-success { background: rgba(0, 255, 0, 0.1); color: #00ff00; border: 1px solid #004400; }
-        .badge-pending { background: #333; color: #aaa; }
-
-        .btn-mempool {
-            display: inline-flex;
-            align-items: center;
-            background: rgba(247, 147, 26, 0.15);
-            color: #f7931a;
-            border: 1px solid #5a3a1a;
-            padding: 4px 8px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 11px;
-            font-weight: bold;
-            font-family: 'Segoe UI', sans-serif;
-            transition: 0.2s;
-        }
-        .btn-mempool:hover {
-            background: #f7931a;
-            color: #000;
-        }
+        body { background-color: #0d1117; color: #c9d1d9; font-family: 'Courier New', Courier, monospace; }
+        .glass { background: rgba(22, 27, 34, 0.8); backdrop-filter: blur(10px); border: 1px solid #30363d; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="logo">LUMEN <span>L2</span></div>
-            <div class="status">● TESTNET LIVE</div>
+<body class="p-6">
+    <header class="mb-8 flex justify-between items-center glass p-4 rounded-lg shadow-lg">
+        <h1 class="text-2xl font-bold text-orange-500">🟠 Lumen BTC L2</h1>
+        <div id="status" class="text-gray-500 font-bold">Checking...</div>
+    </header>
+
+    <div class="mb-8 glass p-4 rounded-lg flex gap-4 shadow-lg">
+        <input type="text" id="searchInput" placeholder="Search Address Balance..." class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-white focus:outline-none focus:border-orange-500">
+        <button onclick="search()" class="bg-orange-600 hover:bg-orange-700 px-8 py-3 rounded text-white font-bold transition">Search</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">Network Info</h2>
+            <ul class="space-y-4">
+                <li class="flex justify-between items-center"><span>Network:</span> <span class="bg-blue-900 text-blue-300 px-2 py-1 rounded text-sm">Testnet3</span></li>
+                <li class="flex justify-between items-center"><span>VM Engine:</span> <span class="bg-purple-900 text-purple-300 px-2 py-1 rounded text-sm">SVM</span></li>
+                <li class="flex justify-between items-center"><span>State:</span> <span class="text-green-400 font-bold">Synchronized</span></li>
+            </ul>
         </div>
 
-        <div class="grid">
-            <div class="card">
-                <div class="card-label">Bridge Operator</div>
-                <div class="card-value" id="op-addr">...</div>
+        <div class="glass p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">Live Mempool</h2>
+            <div id="blocks" class="space-y-2 text-sm text-gray-400">
+                <div class="p-3 bg-gray-800 rounded border-l-4 border-orange-500">Listening for new transactions...</div>
             </div>
-            <div class="card">
-                <div class="card-label">Your Wallet</div>
-                <div class="card-value">
-                    <span id="my-addr">Disconnected</span>
-                    <div style="margin-top:10px; display:flex; gap:10px;">
-                        <button id="btn-connect" onclick="connect()" style="font-size: 12px; padding: 6px 12px;">Connect UniSat</button>
-                        <button id="btn-faucet" onclick="faucet()" class="faucet-btn" style="font-size: 12px; padding: 6px 12px;">🚰 Faucet</button>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-label">L2 Balance</div>
-                <div class="card-value" id="my-bal">0.00 sats</div>
-            </div>
         </div>
+    </div>
 
-        <div class="input-group">
-            <span style="color:#f7931a; font-weight:bold; padding-right:10px;">></span>
-            <input id="cmd" placeholder="Enter command..." disabled>
-            <button class="primary" id="btn-exec" onclick="execute()" disabled>EXECUTE</button>
-        </div>
-
-        <div class="help-box">
-            <span>Try:</span>
-            <div class="cmd-chip" onclick="fillCmd('Transfer 100 tb1q...')">Transfer <span class="cmd-desc">AMOUNT</span> <span class="cmd-desc">ADDR</span></div>
-            <div class="cmd-chip" onclick="fillCmd('Withdraw 500')">Withdraw <span class="cmd-desc">AMOUNT</span></div>
-        </div>
-
-        <h3 style="color:#888; margin-bottom:15px;">Transaction History</h3>
-        <table id="tx-table">
-            <thead>
-                <tr>
-                    <th>TYPE</th>
-                    <th>STATUS / HASH</th>
-                    <th>SENDER</th>
-                    <th>RECIPIENT</th>
-                    <th>AMOUNT</th>
-                </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-        </table>
+    <div id="resultArea" class="mt-8 glass p-6 rounded-lg hidden shadow-lg">
+        <h2 class="text-xl font-bold text-white mb-4">Query Result</h2>
+        <pre id="resultData" class="text-sm text-green-400 overflow-x-auto bg-gray-900 p-4 rounded border border-gray-800"></pre>
     </div>
 
     <script>
-        const API_URL = window.location.origin; 
-        let myPubkey = "";
+        // Config
+        const RPC = window.location.origin;
 
-        async function connect() {
-            if (typeof window.unisat === 'undefined') return alert('Please install UniSat Wallet!');
+        // Update
+        async function updateStatus() {
             try {
-                const accts = await window.unisat.requestAccounts();
-                myPubkey = await window.unisat.getPublicKey();
-                document.getElementById('my-addr').innerText = accts[0].substring(0, 10) + '...';
-                document.getElementById('btn-connect').innerText = 'Connected';
-                document.getElementById('btn-faucet').style.display = 'inline-block';
-                document.getElementById('cmd').disabled = false;
-                document.getElementById('btn-exec').disabled = false;
-                update();
-            } catch(e) { alert(e.message); }
+                const res = await fetch(`${RPC}/status`);
+                if (res.ok) {
+                    document.getElementById('status').innerText = '🟢 Connected';
+                    document.getElementById('status').className = 'text-green-400 font-bold animate-pulse';
+                }
+            } catch (e) {
+                document.getElementById('status').innerText = '🔴 Offline';
+                document.getElementById('status').className = 'text-red-500 font-bold';
+            }
         }
 
-        async function faucet() {
-             try {
-                const sig = await window.unisat.signMessage("Faucet");
-                const res = await fetch(`${API_URL}/api/cmd`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ cmd: "Faucet", sig, pubkey: myPubkey })
-                });
-                const json = await res.json();
-                if(json.status === 'ok') {
-                    alert('Success! 1000 sats added. Wait for block...');
-                    update();
+        // Search
+        async function search() {
+            const addr = document.getElementById('searchInput').value;
+            if (!addr) return;
+            
+            document.getElementById('resultArea').classList.remove('hidden');
+            document.getElementById('resultData').innerText = 'Loading...';
+
+            try {
+                const res = await fetch(`${RPC}/balance/${addr}`);
+                if (res.ok) {
+                    const data = await res.text();
+                    document.getElementById('resultData').innerText = `Address: ${addr}\nBalance: ${data} LBTC`;
                 } else {
-                    alert('Error: ' + json.msg);
+                    document.getElementById('resultData').innerText = 'Account not found or zero balance.';
                 }
-            } catch(e) { alert(e.message); }
+            } catch (e) {
+                document.getElementById('resultData').innerText = 'Network error.';
+            }
         }
 
-        async function execute() {
-            const cmd = document.getElementById('cmd').value;
-            if(!cmd) return;
-            try {
-                const sig = await window.unisat.signMessage(cmd);
-                const res = await fetch(`${API_URL}/api/cmd`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ cmd, sig, pubkey: myPubkey })
-                });
-                const json = await res.json();
-                if(json.status === 'ok') {
-                    alert('Queued!');
-                    document.getElementById('cmd').value = '';
-                    update();
-                } else {
-                    alert('Error: ' + json.msg);
-                }
-            } catch(e) { alert(e); }
-        }
-
-        function fillCmd(text) {
-            const input = document.getElementById('cmd');
-            input.value = text;
-            input.focus();
-        }
-
-        function sh(s) { return s ? s.substring(0,6)+'...' : 'System'; }
-
-        async function update() {
-            try {
-                const r = await fetch(`${API_URL}/api/state`);
-                const d = await r.json();
-                
-                document.getElementById('op-addr').innerText = sh(d.operator);
-                
-                if(window.unisat) {
-                    const accts = await window.unisat.getAccounts();
-                    if(accts.length > 0) {
-                        const myAddr = accts[0];
-                        const bal = d.balances[myAddr] || 0;
-                        document.getElementById('my-bal').innerText = bal + ' sats';
-                    }
-                }
-
-                const tbody = document.getElementById('rows');
-                tbody.innerHTML = '';
-                
-                let lastSettlementIndex = -1;
-                d.history.forEach((tx, index) => {
-                    if(tx.tx_type === 'Settlement') lastSettlementIndex = index;
-                });
-
-                const reversedHistory = d.history.map((tx, i) => ({...tx, originalIndex: i})).reverse();
-
-                reversedHistory.forEach(tx => {
-                    let statusHtml = '';
-                    
-                    if (tx.txid.length > 50 && !tx.txid.startsWith('L2_')) {
-                        statusHtml = `<a href="https://mempool.space/testnet/tx/${tx.txid}" target="_blank" class="btn-mempool">View in Mempool ↗</a>`;
-                    } 
-                    else {
-                        if (tx.originalIndex < lastSettlementIndex) {
-                            statusHtml = `<span class="badge badge-success">✓ FINALIZED</span>`;
-                        } else {
-                            statusHtml = `<span class="badge badge-pending">⏳ PENDING</span>`;
-                        }
-                    }
-
-                    tbody.innerHTML += `
-                        <tr>
-                            <td style="color:#fff"><b>${tx.tx_type}</b></td>
-                            <td>${statusHtml}</td>
-                            <td style="font-family:monospace; color:#888">${sh(tx.from)}</td>
-                            <td style="font-family:monospace; color:#888">${sh(tx.to)}</td>
-                            <td style="color:#fff">${tx.amount}</td>
-                        </tr>
-                    `;
-                });
-            } catch(e) {}
-        }
-        setInterval(update, 3000);
-        update();
+        // Loop
+        setInterval(updateStatus, 3000);
+        updateStatus();
     </script>
 </body>
 </html>
