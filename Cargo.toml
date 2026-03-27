@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "node", "yield_contract",
+    "node",
 ]
 resolver = "2"
 

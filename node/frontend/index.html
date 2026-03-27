@@ -1,91 +1,778 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumen L2 Explorer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #0d1117; color: #c9d1d9; font-family: 'Courier New', Courier, monospace; }
-        .glass { background: rgba(22, 27, 34, 0.8); backdrop-filter: blur(10px); border: 1px solid #30363d; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumen Network — Command Center</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+    :root {
+      --bg: #080b0f;
+      --surface: #0d1117;
+      --surface2: #161b22;
+      --border: #21262d;
+      --orange: #f7931a;
+      --orange-glow: rgba(247,147,26,0.12);
+      --orange-dim: rgba(247,147,26,0.06);
+      --green: #3fb950;
+      --blue: #58a6ff;
+      --red: #f85149;
+      --yellow: #e3b341;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --muted2: #484f58;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(247,147,26,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(247,147,26,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; position: relative; z-index: 1; }
+
+    /* ─── Sidebar ─────────────────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .logo {
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .logo-mark {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--orange);
+      letter-spacing: -1px;
+    }
+    .logo-sub {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .logo-peg {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--green);
+      margin-top: 6px;
+      background: rgba(63,185,80,0.08);
+      border: 1px solid rgba(63,185,80,0.2);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .nav-section { padding: 0 12px; margin-bottom: 8px; }
+    .nav-label { font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 2px; padding: 8px 8px 4px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.15s;
+      font-size: 13px;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(247,147,26,0.2); }
+    .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+
+    .sidebar-wallet {
+      margin-top: auto;
+      padding: 16px 20px 0;
+      border-top: 1px solid var(--border);
+    }
+    .wallet-status { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted2); }
+    .dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .wallet-addr { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
+    .wallet-bal-big { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); }
+    .wallet-bal-big span { font-size: 12px; color: var(--orange); margin-left: 4px; }
+    .btn-connect {
+      width: 100%;
+      background: var(--orange);
+      color: #000;
+      border: none;
+      padding: 9px;
+      border-radius: 6px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      margin-top: 10px;
+      letter-spacing: 0.5px;
+      transition: opacity 0.2s;
+    }
+    .btn-connect:hover { opacity: 0.85; }
+
+    /* ─── Main ─────────────────────────────────────────────────────────────── */
+    .main { padding: 32px; overflow-y: auto; }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .page-header { margin-bottom: 28px; }
+    .page-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+    .page-sub { color: var(--muted); font-size: 13px; }
+
+    /* ─── Stats Grid ───────────────────────────────────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      transition: border-color 0.2s;
+    }
+    .stat-card:hover { border-color: var(--orange); }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+    .stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; }
+    .stat-value.orange { color: var(--orange); }
+    .stat-value.green { color: var(--green); }
+    .stat-value.blue { color: var(--blue); }
+    .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ─── Terminal ─────────────────────────────────────────────────────────── */
+    .terminal-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .terminal-bar {
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .td-red { background: #ff5f57; }
+    .td-yellow { background: #febc2e; }
+    .td-green { background: #28c840; }
+    .terminal-body { padding: 16px; }
+    .cmd-row { display: flex; align-items: center; gap: 12px; }
+    .cmd-prompt { font-family: 'IBM Plex Mono', monospace; color: var(--orange); font-weight: 600; font-size: 16px; flex-shrink: 0; }
+    .cmd-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      outline: none;
+    }
+    .cmd-input::placeholder { color: var(--muted2); }
+    .cmd-input:disabled { opacity: 0.4; }
+    .btn-exec {
+      background: var(--orange);
+      color: #000;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      letter-spacing: 1px;
+    }
+    .btn-exec:hover { opacity: 0.85; }
+    .btn-exec:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .cmd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip:hover { border-color: var(--orange); color: var(--text); }
+    .chip .c-key { color: var(--orange); }
+    .chip .c-arg { color: var(--blue); }
+
+    /* ─── Transaction Table ────────────────────────────────────────────────── */
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 12px;
+    }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    td { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(247,147,26,0.03); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .badge-green { background: rgba(63,185,80,0.1); color: var(--green); border: 1px solid rgba(63,185,80,0.25); }
+    .badge-orange { background: var(--orange-glow); color: var(--orange); border: 1px solid rgba(247,147,26,0.3); }
+    .badge-blue { background: rgba(88,166,255,0.1); color: var(--blue); border: 1px solid rgba(88,166,255,0.25); }
+    .badge-yellow { background: rgba(227,179,65,0.1); color: var(--yellow); border: 1px solid rgba(227,179,65,0.25); }
+    .badge-red { background: rgba(248,81,73,0.1); color: var(--red); border: 1px solid rgba(248,81,73,0.25); }
+    .badge-gray { background: rgba(125,133,144,0.1); color: var(--muted); border: 1px solid var(--border); }
+
+    .mono { font-family: 'IBM Plex Mono', monospace; }
+    .addr { color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+    .amount { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+
+    .mempool-link {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--orange-glow);
+      color: var(--orange);
+      border: 1px solid rgba(247,147,26,0.2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 10px;
+      font-weight: 600;
+      transition: 0.15s;
+    }
+    .mempool-link:hover { background: var(--orange); color: #000; }
+
+    /* ─── Apps Grid ────────────────────────────────────────────────────────── */
+    .apps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .app-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+    .app-card:hover { border-color: var(--orange); }
+    .app-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .app-name { font-weight: 600; font-size: 15px; }
+    .app-token { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--orange); }
+    .app-rate { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .app-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .app-stats { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .app-stat { font-size: 11px; color: var(--muted); }
+    .app-stat strong { color: var(--text); display: block; font-family: 'IBM Plex Mono', monospace; }
+
+    /* ─── Toast ────────────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 20px;
+      font-size: 13px;
+      max-width: 360px;
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 999;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); }
+    #toast.error { border-color: var(--red); }
+    #toast-icon { margin-right: 8px; }
+
+    /* ─── Settlement bar ───────────────────────────────────────────────────── */
+    .settlement-bar {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      font-size: 12px;
+    }
+    .settlement-root {
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--green);
+      font-size: 11px;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty-text { font-size: 14px; }
+  </style>
 </head>
-<body class="p-6">
-    <header class="mb-8 flex justify-between items-center glass p-4 rounded-lg shadow-lg">
-        <h1 class="text-2xl font-bold text-orange-500">🟠 Lumen BTC L2</h1>
-        <div id="status" class="text-gray-500 font-bold">Checking...</div>
-    </header>
+<body>
+<div class="layout">
 
-    <div class="mb-8 glass p-4 rounded-lg flex gap-4 shadow-lg">
-        <input type="text" id="searchInput" placeholder="Search Address Balance..." class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-white focus:outline-none focus:border-orange-500">
-        <button onclick="search()" class="bg-orange-600 hover:bg-orange-700 px-8 py-3 rounded text-white font-bold transition">Search</button>
+  <!-- ─── Sidebar ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">⬡ LUMEN</div>
+      <div class="logo-sub">Bitcoin L2 Network</div>
+      <div class="logo-peg">1 LSAT = 1 Satoshi</div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="glass p-6 rounded-lg shadow-lg">
-            <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">Network Info</h2>
-            <ul class="space-y-4">
-                <li class="flex justify-between items-center"><span>Network:</span> <span class="bg-blue-900 text-blue-300 px-2 py-1 rounded text-sm">Testnet3</span></li>
-                <li class="flex justify-between items-center"><span>VM Engine:</span> <span class="bg-purple-900 text-purple-300 px-2 py-1 rounded text-sm">SVM</span></li>
-                <li class="flex justify-between items-center"><span>State:</span> <span class="text-green-400 font-bold">Synchronized</span></li>
-            </ul>
-        </div>
+    <nav class="nav-section">
+      <div class="nav-label">Network</div>
+      <div class="nav-item active" onclick="showPage('dashboard', this)">
+        <span class="nav-icon">⬡</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('explorer', this)">
+        <span class="nav-icon">◈</span> Explorer
+      </div>
+      <div class="nav-item" onclick="showPage('settlements', this)">
+        <span class="nav-icon">⛓</span> Settlements
+      </div>
+    </nav>
 
-        <div class="glass p-6 rounded-lg shadow-lg">
-            <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">Live Mempool</h2>
-            <div id="blocks" class="space-y-2 text-sm text-gray-400">
-                <div class="p-3 bg-gray-800 rounded border-l-4 border-orange-500">Listening for new transactions...</div>
+    <nav class="nav-section">
+      <div class="nav-label">Ecosystem</div>
+      <div class="nav-item" onclick="showPage('apps', this)">
+        <span class="nav-icon">◻</span> Apps & Games
+      </div>
+    </nav>
+
+    <div class="sidebar-wallet">
+      <div class="wallet-status">
+        <div class="dot" id="conn-dot"></div>
+        <span style="font-size:12px; color: var(--muted)" id="conn-label">Not connected</span>
+      </div>
+      <div id="wallet-info" style="display:none;">
+        <div class="wallet-addr" id="disp-addr">—</div>
+        <div class="wallet-bal-big" id="disp-bal">0<span>LSAT</span></div>
+      </div>
+      <button class="btn-connect" id="btn-connect" onclick="connectWallet()">
+        Connect UniSat
+      </button>
+    </div>
+  </aside>
+
+  <!-- ─── Main ─────────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Dashboard -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div class="page-title">Command Center</div>
+        <div class="page-sub">Lumen Network · Testnet · LSAT backed 1:1 by Bitcoin</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Transactions</div>
+          <div class="stat-value orange" id="s-txs">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Volume</div>
+          <div class="stat-value green" id="s-vol">—</div>
+          <div class="stat-sub">LSAT</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Accounts</div>
+          <div class="stat-value blue" id="s-accs">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Apps Deployed</div>
+          <div class="stat-value" id="s-apps">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">L2 Block Height</div>
+          <div class="stat-value mono" id="s-height">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Network Fee</div>
+          <div class="stat-value green">0 LSAT</div>
+          <div class="stat-sub">Free forever</div>
+        </div>
+      </div>
+
+      <!-- State Root Bar -->
+      <div class="settlement-bar">
+        <span style="color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">State Root</span>
+        <div class="settlement-root" id="state-root-bar">—</div>
+        <span class="badge badge-green">⛓ Anchored</span>
+      </div>
+
+      <!-- Terminal -->
+      <div class="terminal-wrap">
+        <div class="terminal-bar">
+          <div class="terminal-dot td-red"></div>
+          <div class="terminal-dot td-yellow"></div>
+          <div class="terminal-dot td-green"></div>
+          <span style="margin-left: 8px;">lumen-cli — connected to node</span>
+          <span style="margin-left: auto; color: var(--green);" id="node-status-dot">● LIVE</span>
+        </div>
+        <div class="terminal-body">
+          <div class="cmd-row">
+            <span class="cmd-prompt">❯</span>
+            <input class="cmd-input" id="cmd-input" placeholder="Transfer 1000 tb1q... [memo]" disabled>
+            <button class="btn-exec" id="btn-exec" onclick="executeCmd()" disabled>SEND</button>
+          </div>
+          <div class="cmd-chips">
+            <div class="chip" onclick="fill('Faucet')"><span class="c-key">Faucet</span></div>
+            <div class="chip" onclick="fill('Transfer 1000 tb1q... coffee_latte')">
+              <span class="c-key">Transfer</span> <span class="c-arg">AMOUNT ADDR [MEMO]</span>
             </div>
+            <div class="chip" onclick="fill('Withdraw 5000 tb1q...')">
+              <span class="c-key">Withdraw</span> <span class="c-arg">AMOUNT BTC_ADDR</span>
+            </div>
+            <div class="chip" onclick="fill('RegisterApp my-game GOLD 10 Dragons-Quest')">
+              <span class="c-key">RegisterApp</span> <span class="c-arg">ID TOKEN RATE NAME</span>
+            </div>
+            <div class="chip" onclick="fill('BuyToken my-game 100')">
+              <span class="c-key">BuyToken</span> <span class="c-arg">APP_ID LSAT</span>
+            </div>
+            <div class="chip" onclick="fill('TransferToken my-game tb1q... 50')">
+              <span class="c-key">TransferToken</span> <span class="c-arg">APP ADDR AMOUNT</span>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div class="section-title">Recent Transactions</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Status</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Amount</th>
+              <th>Memo</th>
+            </tr>
+          </thead>
+          <tbody id="tx-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
-    <div id="resultArea" class="mt-8 glass p-6 rounded-lg hidden shadow-lg">
-        <h2 class="text-xl font-bold text-white mb-4">Query Result</h2>
-        <pre id="resultData" class="text-sm text-green-400 overflow-x-auto bg-gray-900 p-4 rounded border border-gray-800"></pre>
+    <!-- Explorer -->
+    <div class="page" id="page-explorer">
+      <div class="page-header">
+        <div class="page-title">Block Explorer</div>
+        <div class="page-sub">Browse all LSAT transactions</div>
+      </div>
+      <div class="section-title">All Transactions</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Status</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Amount</th>
+              <th>Memo</th>
+              <th>Time</th>
+              <th>L1</th>
+            </tr>
+          </thead>
+          <tbody id="explorer-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
-    <script>
-        // Config
-        const RPC = window.location.origin;
+    <!-- Settlements -->
+    <div class="page" id="page-settlements">
+      <div class="page-header">
+        <div class="page-title">L1 Settlements</div>
+        <div class="page-sub">State roots anchored to Bitcoin via OP_RETURN every 3 minutes</div>
+      </div>
+      <div class="settlement-bar" style="margin-bottom: 24px;">
+        <span style="color: var(--muted); font-size: 11px;">LATEST STATE ROOT</span>
+        <div class="settlement-root" id="settle-root-big">—</div>
+      </div>
+      <div class="section-title">Settlement History</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>State Root</th>
+              <th>Bitcoin TxID</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="settle-tbody"></tbody>
+        </table>
+      </div>
+    </div>
 
-        // Update
-        async function updateStatus() {
-            try {
-                const res = await fetch(`${RPC}/status`);
-                if (res.ok) {
-                    document.getElementById('status').innerText = '🟢 Connected';
-                    document.getElementById('status').className = 'text-green-400 font-bold animate-pulse';
-                }
-            } catch (e) {
-                document.getElementById('status').innerText = '🔴 Offline';
-                document.getElementById('status').className = 'text-red-500 font-bold';
-            }
-        }
+    <!-- Apps -->
+    <div class="page" id="page-apps">
+      <div class="page-header">
+        <div class="page-title">Apps & Games</div>
+        <div class="page-sub">Applications built on Lumen Network — each with their own tokens backed by LSAT</div>
+      </div>
+      <div id="apps-grid" class="apps-grid"></div>
+    </div>
 
-        // Search
-        async function search() {
-            const addr = document.getElementById('searchInput').value;
-            if (!addr) return;
-            
-            document.getElementById('resultArea').classList.remove('hidden');
-            document.getElementById('resultData').innerText = 'Loading...';
+  </main>
+</div>
 
-            try {
-                const res = await fetch(`${RPC}/balance/${addr}`);
-                if (res.ok) {
-                    const data = await res.text();
-                    document.getElementById('resultData').innerText = `Address: ${addr}\nBalance: ${data} LBTC`;
-                } else {
-                    document.getElementById('resultData').innerText = 'Account not found or zero balance.';
-                }
-            } catch (e) {
-                document.getElementById('resultData').innerText = 'Network error.';
-            }
-        }
+<!-- Toast -->
+<div id="toast"><span id="toast-icon">✅</span><span id="toast-msg"></span></div>
 
-        // Loop
-        setInterval(updateStatus, 3000);
-        updateStatus();
-    </script>
+<script>
+  const API = window.location.origin;
+  let myAddr = '', myPubkey = '', isConnected = false;
+
+  // ─── Navigation ────────────────────────────────────────────────────────────
+  function showPage(id, el) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    if (el) el.classList.add('active');
+  }
+
+  // ─── Wallet ────────────────────────────────────────────────────────────────
+  async function connectWallet() {
+    if (!window.unisat) return toast('Install UniSat Wallet extension', 'error');
+    try {
+      const accts = await window.unisat.requestAccounts();
+      myAddr = accts[0];
+      myPubkey = await window.unisat.getPublicKey();
+      isConnected = true;
+      document.getElementById('conn-dot').classList.add('connected');
+      document.getElementById('conn-label').textContent = 'Connected';
+      document.getElementById('btn-connect').textContent = '✓ Connected';
+      document.getElementById('btn-connect').style.background = 'var(--green)';
+      document.getElementById('wallet-info').style.display = 'block';
+      document.getElementById('disp-addr').textContent = myAddr.slice(0,10) + '...' + myAddr.slice(-6);
+      document.getElementById('cmd-input').disabled = false;
+      document.getElementById('btn-exec').disabled = false;
+      await refresh();
+      toast('Wallet connected!', 'success');
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  // ─── Command execution ─────────────────────────────────────────────────────
+  function fill(cmd) {
+    const input = document.getElementById('cmd-input');
+    input.value = cmd;
+    input.focus();
+  }
+
+  async function executeCmd() {
+    if (!isConnected) return toast('Connect wallet first', 'error');
+    const cmd = document.getElementById('cmd-input').value.trim();
+    if (!cmd) return;
+    try {
+      const sig = await window.unisat.signMessage(cmd);
+      const res = await fetch(`${API}/api/cmd`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cmd, sig, pubkey: myPubkey })
+      });
+      const json = await res.json();
+      if (json.status === 'ok') {
+        toast('Transaction sent!', 'success');
+        document.getElementById('cmd-input').value = '';
+        setTimeout(refresh, 800);
+      } else {
+        toast(json.msg || 'Error', 'error');
+      }
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.activeElement.id === 'cmd-input') executeCmd();
+  });
+
+  // ─── Data refresh ──────────────────────────────────────────────────────────
+  async function refresh() {
+    try {
+      const r = await fetch(`${API}/api/state`);
+      const d = await r.json();
+      renderDashboard(d);
+      renderExplorer(d);
+      renderApps(d);
+    } catch(e) { document.getElementById('node-status-dot').textContent = '● OFFLINE'; document.getElementById('node-status-dot').style.color = 'var(--red)'; }
+
+    try {
+      const r = await fetch(`${API}/api/settlements`);
+      const d = await r.json();
+      renderSettlements(d);
+    } catch(e) {}
+  }
+
+  function renderDashboard(d) {
+    document.getElementById('s-txs').textContent = (d.total_transactions || 0).toLocaleString();
+    document.getElementById('s-vol').textContent = ((d.stats?.total_volume_lsat || 0)).toLocaleString();
+    document.getElementById('s-accs').textContent = (d.stats?.total_accounts || 0).toLocaleString();
+    document.getElementById('s-apps').textContent = (d.apps?.length || 0);
+    document.getElementById('s-height').textContent = '#' + (d.block_height || 0);
+    const root = d.latest_state_root || '—';
+    document.getElementById('state-root-bar').textContent = root;
+
+    if (isConnected) {
+      const bal = d.balances?.[myAddr] || 0;
+      document.getElementById('disp-bal').innerHTML = bal.toLocaleString() + '<span>LSAT</span>';
+    }
+
+    const tbody = document.getElementById('tx-tbody');
+    const recent = [...(d.history || [])].reverse().slice(0, 20);
+    tbody.innerHTML = recent.length ? recent.map(tx => renderTxRow(tx, false)).join('') :
+      '<tr><td colspan="6" class="empty-state"><div class="empty-icon">◈</div><div class="empty-text">No transactions yet</div></td></tr>';
+  }
+
+  function renderExplorer(d) {
+    const tbody = document.getElementById('explorer-tbody');
+    const all = [...(d.history || [])].reverse();
+    tbody.innerHTML = all.length ? all.map(tx => renderTxRow(tx, true)).join('') :
+      '<tr><td colspan="8" class="empty-state"><div class="empty-icon">◈</div><div class="empty-text">No transactions yet</div></td></tr>';
+  }
+
+  function renderTxRow(tx, showTime) {
+    const badge = statusBadge(tx.status);
+    const typeBadge = typeBadgeFn(tx.tx_type);
+    const from = tx.from ? (tx.from.length > 14 ? tx.from.slice(0,8)+'…'+tx.from.slice(-6) : tx.from) : '—';
+    const to = tx.to ? (tx.to.length > 14 ? tx.to.slice(0,8)+'…'+tx.to.slice(-6) : tx.to) : '—';
+    const amount = tx.amount > 0 ? `<span class="amount">${tx.amount.toLocaleString()}</span> <span style="color:var(--muted);font-size:11px;">${tx.token||'LSAT'}</span>` : '—';
+    const memo = tx.memo ? `<span style="color:var(--muted);font-size:12px;">${tx.memo}</span>` : '—';
+    const l1 = tx.btc_txid ? `<a href="https://mempool.space/testnet/tx/${tx.btc_txid}" target="_blank" class="mempool-link">L1 ↗</a>` : '';
+    const time = showTime ? `<td class="addr">${new Date(tx.timestamp * 1000).toLocaleTimeString()}</td>` : '';
+    const l1cell = showTime ? `<td>${l1}</td>` : '';
+    return `<tr><td>${typeBadge}</td><td>${badge}</td><td class="addr">${from}</td><td class="addr">${to}</td><td>${amount}</td><td>${memo}</td>${time}${l1cell}</tr>`;
+  }
+
+  function renderSettlements(d) {
+    document.getElementById('settle-root-big').textContent = d.latest_root || '—';
+    const tbody = document.getElementById('settle-tbody');
+    const settlements = d.settlements || [];
+    tbody.innerHTML = settlements.length ? settlements.reverse().map(s => `
+      <tr>
+        <td class="mono" style="font-size:12px; color:var(--green);">${s.memo?.replace('State root anchored', '') || s.txid}</td>
+        <td>${s.btc_txid ? `<a href="https://mempool.space/testnet/tx/${s.btc_txid}" target="_blank" class="mempool-link">${s.btc_txid.slice(0,16)}… ↗</a>` : '—'}</td>
+        <td class="addr">${new Date(s.timestamp * 1000).toLocaleString()}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="3" class="empty-state"><div class="empty-icon">⛓</div><div class="empty-text">No settlements yet — anchoring every 3 minutes</div></td></tr>';
+  }
+
+  function renderApps(d) {
+    const apps = d.apps || [];
+    const grid = document.getElementById('apps-grid');
+    if (!apps.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">◻</div><div class="empty-text">No apps yet. Be the first to register your game or service!</div><div style="margin-top:8px; font-size:12px; color:var(--muted);">Use: RegisterApp my-game GOLD 10 My-Game-Name</div></div>`;
+      return;
+    }
+    grid.innerHTML = apps.map(a => `
+      <div class="app-card">
+        <div class="app-card-header">
+          <div>
+            <div class="app-name">${a.app_name}</div>
+            <div class="app-token">${a.token_name} Token</div>
+          </div>
+          <span class="badge badge-orange">${a.app_id}</span>
+        </div>
+        <div class="app-rate">1 LSAT = ${a.rate_per_lsat} ${a.token_name}</div>
+        <div class="app-desc" style="margin-top:8px;">${a.description || 'No description'}</div>
+        <div class="app-stats">
+          <div class="app-stat"><strong>${(a.lsat_collected||0).toLocaleString()}</strong> LSAT collected</div>
+          ${a.website ? `<div class="app-stat"><a href="${a.website}" target="_blank" style="color:var(--blue);">Website ↗</a></div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+  function statusBadge(status) {
+    const map = {
+      'Confirmed': '<span class="badge badge-green">Confirmed</span>',
+      'Finalized': '<span class="badge badge-blue">Finalized</span>',
+      'InChallenge': '<span class="badge badge-yellow">24h Window</span>',
+      'Completed': '<span class="badge badge-green">Completed</span>',
+      'Pending': '<span class="badge badge-gray">Pending</span>',
+    };
+    return map[status] || `<span class="badge badge-gray">${status||'—'}</span>`;
+  }
+
+  function typeBadgeFn(type) {
+    const map = {
+      'Transfer': '<span class="badge badge-blue">Transfer</span>',
+      'PegIn': '<span class="badge badge-green">PegIn</span>',
+      'PegOut': '<span class="badge badge-orange">PegOut</span>',
+      'Faucet': '<span class="badge badge-gray">Faucet</span>',
+      'Settlement': '<span class="badge badge-blue">⛓ Settlement</span>',
+      'AppRegister': '<span class="badge badge-orange">AppReg</span>',
+      'AppTokenBuy': '<span class="badge badge-yellow">TokenBuy</span>',
+      'AppTokenTransfer': '<span class="badge badge-yellow">TokenTx</span>',
+      'Deploy': '<span class="badge badge-gray">Deploy</span>',
+      'ContractDeploy': '<span class="badge badge-blue">Contract</span>',
+      'VM_Execute': '<span class="badge badge-blue">Execute</span>',
+    };
+    return map[type] || `<span class="badge badge-gray">${type||'—'}</span>`;
+  }
+
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    document.getElementById('toast-icon').textContent = type === 'success' ? '✅' : '❌';
+    document.getElementById('toast-msg').textContent = msg;
+    el.className = 'show ' + type;
+    setTimeout(() => el.className = '', 3500);
+  }
+
+  // ─── Init ───────────────────────────────────────────────────────────────────
+  setInterval(refresh, 4000);
+  refresh();
+</script>
 </body>
 </html>

@@ -24,6 +24,8 @@ fn hash_node(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
     sha256::Hash::from_engine(engine).to_byte_array()
 }
 
+/// Build Merkle root from LSAT balances (HashMap<Address, Lsat>)
+/// This root is anchored to Bitcoin L1 via OP_RETURN
 pub fn build_merkle_root(balances: &HashMap<String, u64>) -> String {
     if balances.is_empty() {
         return sha256::Hash::hash(b"empty").to_string();

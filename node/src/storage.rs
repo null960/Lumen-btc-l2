@@ -1,6 +1,6 @@
 use std::error::Error;
 use crate::state::AppState;
-use redb::{Database, ReadableTable, TableDefinition}; 
+use redb::{Database, ReadableTable, TableDefinition};
 
 const STATE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("state");
 
@@ -31,6 +31,7 @@ impl Storage {
         let read_txn = self.db.begin_read().ok()?;
         let table = read_txn.open_table(STATE_TABLE).ok()?;
         let data = table.get("current_state").ok()??;
+        // If deserialization fails (old state format), start fresh
         bincode::deserialize(data.value()).ok()
     }
 }
