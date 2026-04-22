@@ -1,778 +1,576 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lumen Network — Command Center</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumen — Bitcoin Payment API</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c0c;--surface:#141414;--surface2:#1a1a1a;
+  --border:#242424;--border2:#2e2e2e;
+  --text:#f2f2f2;--muted:#6b6b6b;--hint:#404040;
+  --accent:#f7931a;--accent-dim:rgba(247,147,26,.12);
+  --green:#22c55e;--green-dim:rgba(34,197,94,.1);
+  --red:#ef4444;--red-dim:rgba(239,68,68,.1);
+  --mono:'IBM Plex Mono',monospace;--sans:'DM Sans',sans-serif;
+  --r:6px;--r2:10px;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.6}
 
-    :root {
-      --bg: #080b0f;
-      --surface: #0d1117;
-      --surface2: #161b22;
-      --border: #21262d;
-      --orange: #f7931a;
-      --orange-glow: rgba(247,147,26,0.12);
-      --orange-dim: rgba(247,147,26,0.06);
-      --green: #3fb950;
-      --blue: #58a6ff;
-      --red: #f85149;
-      --yellow: #e3b341;
-      --text: #e6edf3;
-      --muted: #7d8590;
-      --muted2: #484f58;
-    }
+/* ── Auth screen ── */
+.auth{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+.auth-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:32px}
+.auth-logo{font-family:var(--mono);font-size:20px;color:var(--accent);margin-bottom:6px}
+.auth-sub{font-size:13px;color:var(--muted);margin-bottom:28px}
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── App shell ── */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:216px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 0}
+.logo-wrap{padding:0 16px 20px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.logo{font-family:var(--mono);font-size:17px;color:var(--accent)}
+.logo-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 16px;color:var(--muted);font-size:13px;text-decoration:none;border-left:2px solid transparent;transition:all .12s}
+.nav a:hover{color:var(--text);background:rgba(255,255,255,.02)}
+.nav a.active{color:var(--text);border-left-color:var(--accent);background:var(--accent-dim)}
+.nav svg{width:15px;height:15px;flex-shrink:0}
+.nav-footer{margin-top:auto}
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 14px;
-      min-height: 100vh;
-    }
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{padding:12px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.page-title{font-size:14px;font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:14px}
+.node-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
+.top-balance{font-family:var(--mono);font-size:13px;color:var(--accent)}
 
-    /* Subtle grid background */
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background-image:
-        linear-gradient(rgba(247,147,26,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(247,147,26,0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
-      z-index: 0;
-    }
+.content{padding:24px 28px;overflow-y:auto;flex:1}
 
-    .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; position: relative; z-index: 1; }
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:20px 22px}
+.card-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:12px;font-weight:500}
 
-    /* ─── Sidebar ─────────────────────────────────────────────────────────── */
-    .sidebar {
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      padding: 24px 0;
-      display: flex;
-      flex-direction: column;
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow-y: auto;
-    }
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:18px 20px}
+.stat-l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.stat-v{font-family:var(--mono);font-size:24px;font-weight:500}
+.stat-s{font-size:12px;color:var(--muted);margin-top:3px}
+.c-accent{color:var(--accent)}
+.c-green{color:var(--green)}
+.c-muted{color:var(--muted)}
 
-    .logo {
-      padding: 0 20px 24px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 16px;
-    }
-    .logo-mark {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--orange);
-      letter-spacing: -1px;
-    }
-    .logo-sub {
-      font-size: 10px;
-      color: var(--muted);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-    .logo-peg {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      color: var(--green);
-      margin-top: 6px;
-      background: rgba(63,185,80,0.08);
-      border: 1px solid rgba(63,185,80,0.2);
-      padding: 3px 8px;
-      border-radius: 4px;
-      display: inline-block;
-    }
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}
+td.t{font-family:var(--sans)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.012)}
+.empty{text-align:center;padding:32px;color:var(--muted);font-family:var(--sans)}
 
-    .nav-section { padding: 0 12px; margin-bottom: 8px; }
-    .nav-label { font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 2px; padding: 8px 8px 4px; }
-    .nav-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      color: var(--muted);
-      transition: all 0.15s;
-      font-size: 13px;
-    }
-    .nav-item:hover { background: var(--surface2); color: var(--text); }
-    .nav-item.active { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(247,147,26,0.2); }
-    .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-size:11px;font-family:var(--sans);font-weight:500}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.b-paid{background:var(--green-dim);color:var(--green)}.b-paid::before{background:var(--green)}
+.b-pending{background:var(--accent-dim);color:var(--accent)}.b-pending::before{background:var(--accent)}
+.b-expired{background:rgba(107,107,107,.1);color:var(--muted)}.b-expired::before{background:var(--muted)}
 
-    .sidebar-wallet {
-      margin-top: auto;
-      padding: 16px 20px 0;
-      border-top: 1px solid var(--border);
-    }
-    .wallet-status { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted2); }
-    .dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .wallet-addr { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
-    .wallet-bal-big { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); }
-    .wallet-bal-big span { font-size: 12px; color: var(--orange); margin-left: 4px; }
-    .btn-connect {
-      width: 100%;
-      background: var(--orange);
-      color: #000;
-      border: none;
-      padding: 9px;
-      border-radius: 6px;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-weight: 600;
-      font-size: 12px;
-      cursor: pointer;
-      margin-top: 10px;
-      letter-spacing: 0.5px;
-      transition: opacity 0.2s;
-    }
-    .btn-connect:hover { opacity: 0.85; }
+/* ── Forms ── */
+.fg{margin-bottom:14px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+input,textarea,select{width:100%;padding:8px 11px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .12s}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+input[readonly]{color:var(--muted)}
+textarea{resize:vertical}
 
-    /* ─── Main ─────────────────────────────────────────────────────────────── */
-    .main { padding: 32px; overflow-y: auto; }
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .12s;text-decoration:none}
+.btn-primary{background:var(--accent);color:#000}.btn-primary:hover{background:#e8870f}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border2)}.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-danger{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.3)}.btn-danger:hover{background:var(--red-dim)}
 
-    .page { display: none; }
-    .page.active { display: block; }
+/* ── Alert ── */
+.alert{padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:12px;display:none}
+.alert.show{display:block}
+.alert-ok{background:var(--green-dim);border:1px solid rgba(34,197,94,.2);color:var(--green)}
+.alert-err{background:var(--red-dim);border:1px solid rgba(239,68,68,.2);color:var(--red)}
 
-    .page-header { margin-bottom: 28px; }
-    .page-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
-    .page-sub { color: var(--muted); font-size: 13px; }
+/* ── Modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:26px;width:100%;max-width:420px}
+.modal-title{font-size:15px;font-weight:600;margin-bottom:20px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 
-    /* ─── Stats Grid ───────────────────────────────────────────────────────── */
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 18px 20px;
-      transition: border-color 0.2s;
-    }
-    .stat-card:hover { border-color: var(--orange); }
-    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
-    .stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; }
-    .stat-value.orange { color: var(--orange); }
-    .stat-value.green { color: var(--green); }
-    .stat-value.blue { color: var(--blue); }
-    .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+/* ── Code block ── */
+.code{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;font-family:var(--mono);font-size:12px;color:var(--muted);overflow-x:auto;line-height:1.8}
+.code .k{color:#c792ea}.code .s{color:#c3e88d}.code .n{color:var(--accent)}.code .c{color:var(--hint)}
 
-    /* ─── Terminal ─────────────────────────────────────────────────────────── */
-    .terminal-wrap {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      margin-bottom: 24px;
-      overflow: hidden;
-    }
-    .terminal-bar {
-      background: var(--surface2);
-      border-bottom: 1px solid var(--border);
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
-    .td-red { background: #ff5f57; }
-    .td-yellow { background: #febc2e; }
-    .td-green { background: #28c840; }
-    .terminal-body { padding: 16px; }
-    .cmd-row { display: flex; align-items: center; gap: 12px; }
-    .cmd-prompt { font-family: 'IBM Plex Mono', monospace; color: var(--orange); font-weight: 600; font-size: 16px; flex-shrink: 0; }
-    .cmd-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: var(--text);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 14px;
-      outline: none;
-    }
-    .cmd-input::placeholder { color: var(--muted2); }
-    .cmd-input:disabled { opacity: 0.4; }
-    .btn-exec {
-      background: var(--orange);
-      color: #000;
-      border: none;
-      padding: 8px 20px;
-      border-radius: 6px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-weight: 600;
-      font-size: 12px;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      letter-spacing: 1px;
-    }
-    .btn-exec:hover { opacity: 0.85; }
-    .btn-exec:disabled { opacity: 0.3; cursor: not-allowed; }
+/* ── Key row ── */
+.key-row{display:flex;gap:8px}
+.key-row input{flex:1;font-family:var(--mono);font-size:12px}
+.icon-btn{flex-shrink:0;padding:8px 11px;background:transparent;border:1px solid var(--border2);border-radius:var(--r);color:var(--muted);cursor:pointer;font-size:12px;transition:all .12s}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent)}
 
-    .cmd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-    .chip {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 4px 10px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .chip:hover { border-color: var(--orange); color: var(--text); }
-    .chip .c-key { color: var(--orange); }
-    .chip .c-arg { color: var(--blue); }
+/* ── Bolt11 string ── */
+.bolt11{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;background:var(--bg);padding:10px 12px;border-radius:var(--r);border:1px solid var(--border);max-height:88px;overflow:auto}
 
-    /* ─── Transaction Table ────────────────────────────────────────────────── */
-    .section-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      margin-bottom: 12px;
-    }
-    .table-wrap {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    table { width: 100%; border-collapse: collapse; }
-    th {
-      text-align: left;
-      font-size: 11px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface2);
-    }
-    td { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(247,147,26,0.03); }
+/* ── Auth toggle ── */
+.link{color:var(--accent);cursor:pointer;font-size:12px;background:none;border:none;padding:0}
+.link:hover{text-decoration:underline}
 
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-    }
-    .badge-green { background: rgba(63,185,80,0.1); color: var(--green); border: 1px solid rgba(63,185,80,0.25); }
-    .badge-orange { background: var(--orange-glow); color: var(--orange); border: 1px solid rgba(247,147,26,0.3); }
-    .badge-blue { background: rgba(88,166,255,0.1); color: var(--blue); border: 1px solid rgba(88,166,255,0.25); }
-    .badge-yellow { background: rgba(227,179,65,0.1); color: var(--yellow); border: 1px solid rgba(227,179,65,0.25); }
-    .badge-red { background: rgba(248,81,73,0.1); color: var(--red); border: 1px solid rgba(248,81,73,0.25); }
-    .badge-gray { background: rgba(125,133,144,0.1); color: var(--muted); border: 1px solid var(--border); }
-
-    .mono { font-family: 'IBM Plex Mono', monospace; }
-    .addr { color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
-    .amount { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
-
-    .mempool-link {
-      display: inline-flex; align-items: center; gap: 4px;
-      background: var(--orange-glow);
-      color: var(--orange);
-      border: 1px solid rgba(247,147,26,0.2);
-      padding: 2px 8px;
-      border-radius: 4px;
-      text-decoration: none;
-      font-size: 10px;
-      font-weight: 600;
-      transition: 0.15s;
-    }
-    .mempool-link:hover { background: var(--orange); color: #000; }
-
-    /* ─── Apps Grid ────────────────────────────────────────────────────────── */
-    .apps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .app-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 20px;
-      transition: border-color 0.2s;
-    }
-    .app-card:hover { border-color: var(--orange); }
-    .app-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-    .app-name { font-weight: 600; font-size: 15px; }
-    .app-token { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--orange); }
-    .app-rate { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    .app-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
-    .app-stats { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-    .app-stat { font-size: 11px; color: var(--muted); }
-    .app-stat strong { color: var(--text); display: block; font-family: 'IBM Plex Mono', monospace; }
-
-    /* ─── Toast ────────────────────────────────────────────────────────────── */
-    #toast {
-      position: fixed; bottom: 24px; right: 24px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px 20px;
-      font-size: 13px;
-      max-width: 360px;
-      transform: translateY(80px);
-      opacity: 0;
-      transition: all 0.3s;
-      z-index: 999;
-    }
-    #toast.show { transform: translateY(0); opacity: 1; }
-    #toast.success { border-color: var(--green); }
-    #toast.error { border-color: var(--red); }
-    #toast-icon { margin-right: 8px; }
-
-    /* ─── Settlement bar ───────────────────────────────────────────────────── */
-    .settlement-bar {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 24px;
-      font-size: 12px;
-    }
-    .settlement-root {
-      font-family: 'IBM Plex Mono', monospace;
-      color: var(--green);
-      font-size: 11px;
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
-    .empty-icon { font-size: 36px; margin-bottom: 12px; }
-    .empty-text { font-size: 14px; }
-  </style>
+/* ── Responsive ── */
+@media(max-width:720px){
+  .sidebar{width:52px}
+  .logo-wrap,.logo-sub,.nav a span,.nav-footer{display:none}
+  .nav a{justify-content:center;padding:12px}
+  .nav svg{width:18px;height:18px}
+  .content{padding:16px}
+  .stats{grid-template-columns:1fr 1fr}
+}
+</style>
 </head>
 <body>
-<div class="layout">
 
-  <!-- ─── Sidebar ──────────────────────────────────────────────────────────── -->
-  <aside class="sidebar">
-    <div class="logo">
-      <div class="logo-mark">⬡ LUMEN</div>
-      <div class="logo-sub">Bitcoin L2 Network</div>
-      <div class="logo-peg">1 LSAT = 1 Satoshi</div>
+<!-- ─── Auth screen ──────────────────────────────────────── -->
+<div class="auth" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">⚡ lumen</div>
+    <div class="auth-sub">Bitcoin payment API for developers</div>
+
+    <div id="alertAuth" class="alert"></div>
+
+    <div id="formRegister">
+      <div class="fg"><label>Business name</label><input id="rName" placeholder="Acme Coffee"></div>
+      <div class="fg"><label>Email</label><input type="email" id="rEmail" placeholder="you@example.com"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="register()">Create account</button>
+      <p style="text-align:center;margin-top:14px">
+        <button class="link" onclick="toggle('login')">Already have a key? Sign in</button>
+      </p>
     </div>
 
-    <nav class="nav-section">
-      <div class="nav-label">Network</div>
-      <div class="nav-item active" onclick="showPage('dashboard', this)">
-        <span class="nav-icon">⬡</span> Dashboard
-      </div>
-      <div class="nav-item" onclick="showPage('explorer', this)">
-        <span class="nav-icon">◈</span> Explorer
-      </div>
-      <div class="nav-item" onclick="showPage('settlements', this)">
-        <span class="nav-icon">⛓</span> Settlements
-      </div>
-    </nav>
-
-    <nav class="nav-section">
-      <div class="nav-label">Ecosystem</div>
-      <div class="nav-item" onclick="showPage('apps', this)">
-        <span class="nav-icon">◻</span> Apps & Games
-      </div>
-    </nav>
-
-    <div class="sidebar-wallet">
-      <div class="wallet-status">
-        <div class="dot" id="conn-dot"></div>
-        <span style="font-size:12px; color: var(--muted)" id="conn-label">Not connected</span>
-      </div>
-      <div id="wallet-info" style="display:none;">
-        <div class="wallet-addr" id="disp-addr">—</div>
-        <div class="wallet-bal-big" id="disp-bal">0<span>LSAT</span></div>
-      </div>
-      <button class="btn-connect" id="btn-connect" onclick="connectWallet()">
-        Connect UniSat
-      </button>
+    <div id="formLogin" style="display:none">
+      <div class="fg"><label>API Key</label><input type="password" id="lKey" placeholder="lm_live_..."></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="loginKey()">Sign in</button>
+      <p style="text-align:center;margin-top:14px">
+        <button class="link" onclick="toggle('register')">Create new account</button>
+      </p>
     </div>
-  </aside>
-
-  <!-- ─── Main ─────────────────────────────────────────────────────────────── -->
-  <main class="main">
-
-    <!-- Dashboard -->
-    <div class="page active" id="page-dashboard">
-      <div class="page-header">
-        <div class="page-title">Command Center</div>
-        <div class="page-sub">Lumen Network · Testnet · LSAT backed 1:1 by Bitcoin</div>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Total Transactions</div>
-          <div class="stat-value orange" id="s-txs">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Total Volume</div>
-          <div class="stat-value green" id="s-vol">—</div>
-          <div class="stat-sub">LSAT</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Active Accounts</div>
-          <div class="stat-value blue" id="s-accs">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Apps Deployed</div>
-          <div class="stat-value" id="s-apps">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">L2 Block Height</div>
-          <div class="stat-value mono" id="s-height">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Network Fee</div>
-          <div class="stat-value green">0 LSAT</div>
-          <div class="stat-sub">Free forever</div>
-        </div>
-      </div>
-
-      <!-- State Root Bar -->
-      <div class="settlement-bar">
-        <span style="color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">State Root</span>
-        <div class="settlement-root" id="state-root-bar">—</div>
-        <span class="badge badge-green">⛓ Anchored</span>
-      </div>
-
-      <!-- Terminal -->
-      <div class="terminal-wrap">
-        <div class="terminal-bar">
-          <div class="terminal-dot td-red"></div>
-          <div class="terminal-dot td-yellow"></div>
-          <div class="terminal-dot td-green"></div>
-          <span style="margin-left: 8px;">lumen-cli — connected to node</span>
-          <span style="margin-left: auto; color: var(--green);" id="node-status-dot">● LIVE</span>
-        </div>
-        <div class="terminal-body">
-          <div class="cmd-row">
-            <span class="cmd-prompt">❯</span>
-            <input class="cmd-input" id="cmd-input" placeholder="Transfer 1000 tb1q... [memo]" disabled>
-            <button class="btn-exec" id="btn-exec" onclick="executeCmd()" disabled>SEND</button>
-          </div>
-          <div class="cmd-chips">
-            <div class="chip" onclick="fill('Faucet')"><span class="c-key">Faucet</span></div>
-            <div class="chip" onclick="fill('Transfer 1000 tb1q... coffee_latte')">
-              <span class="c-key">Transfer</span> <span class="c-arg">AMOUNT ADDR [MEMO]</span>
-            </div>
-            <div class="chip" onclick="fill('Withdraw 5000 tb1q...')">
-              <span class="c-key">Withdraw</span> <span class="c-arg">AMOUNT BTC_ADDR</span>
-            </div>
-            <div class="chip" onclick="fill('RegisterApp my-game GOLD 10 Dragons-Quest')">
-              <span class="c-key">RegisterApp</span> <span class="c-arg">ID TOKEN RATE NAME</span>
-            </div>
-            <div class="chip" onclick="fill('BuyToken my-game 100')">
-              <span class="c-key">BuyToken</span> <span class="c-arg">APP_ID LSAT</span>
-            </div>
-            <div class="chip" onclick="fill('TransferToken my-game tb1q... 50')">
-              <span class="c-key">TransferToken</span> <span class="c-arg">APP ADDR AMOUNT</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="section-title">Recent Transactions</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Status</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Amount</th>
-              <th>Memo</th>
-            </tr>
-          </thead>
-          <tbody id="tx-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Explorer -->
-    <div class="page" id="page-explorer">
-      <div class="page-header">
-        <div class="page-title">Block Explorer</div>
-        <div class="page-sub">Browse all LSAT transactions</div>
-      </div>
-      <div class="section-title">All Transactions</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Status</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Amount</th>
-              <th>Memo</th>
-              <th>Time</th>
-              <th>L1</th>
-            </tr>
-          </thead>
-          <tbody id="explorer-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Settlements -->
-    <div class="page" id="page-settlements">
-      <div class="page-header">
-        <div class="page-title">L1 Settlements</div>
-        <div class="page-sub">State roots anchored to Bitcoin via OP_RETURN every 3 minutes</div>
-      </div>
-      <div class="settlement-bar" style="margin-bottom: 24px;">
-        <span style="color: var(--muted); font-size: 11px;">LATEST STATE ROOT</span>
-        <div class="settlement-root" id="settle-root-big">—</div>
-      </div>
-      <div class="section-title">Settlement History</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>State Root</th>
-              <th>Bitcoin TxID</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody id="settle-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Apps -->
-    <div class="page" id="page-apps">
-      <div class="page-header">
-        <div class="page-title">Apps & Games</div>
-        <div class="page-sub">Applications built on Lumen Network — each with their own tokens backed by LSAT</div>
-      </div>
-      <div id="apps-grid" class="apps-grid"></div>
-    </div>
-
-  </main>
+  </div>
 </div>
 
-<!-- Toast -->
-<div id="toast"><span id="toast-icon">✅</span><span id="toast-msg"></span></div>
+<!-- ─── App ──────────────────────────────────────────────── -->
+<div class="shell" id="appShell" style="display:none">
+  <nav class="sidebar">
+    <div class="logo-wrap">
+      <div class="logo">⚡ lumen</div>
+      <div class="logo-sub">merchant dashboard</div>
+    </div>
+    <div class="nav" id="nav">
+      <a href="#" class="active" data-s="overview" onclick="go(event,'overview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Overview</span>
+      </a>
+      <a href="#" data-s="invoices" onclick="go(event,'invoices')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span>Invoices</span>
+      </a>
+      <a href="#" data-s="payments" onclick="go(event,'payments')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        <span>Payments</span>
+      </a>
+      <a href="#" data-s="settings" onclick="go(event,'settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </a>
+      <a href="#" data-s="docs" onclick="go(event,'docs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>API docs</span>
+      </a>
+      <div class="nav-footer">
+        <a href="#" onclick="logout()" style="color:var(--red)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Sign out</span>
+        </a>
+      </div>
+    </div>
+  </nav>
 
-<script>
-  const API = window.location.origin;
-  let myAddr = '', myPubkey = '', isConnected = false;
+  <div class="main">
+    <div class="topbar">
+      <div class="page-title" id="pageTitle">Overview</div>
+      <div class="topbar-right">
+        <div class="node-dot" id="nodeDot" title="Node online"></div>
+        <div class="top-balance" id="topBal">0 sats</div>
+      </div>
+    </div>
+    <div class="content">
 
-  // ─── Navigation ────────────────────────────────────────────────────────────
-  function showPage(id, el) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('page-' + id).classList.add('active');
-    if (el) el.classList.add('active');
-  }
-
-  // ─── Wallet ────────────────────────────────────────────────────────────────
-  async function connectWallet() {
-    if (!window.unisat) return toast('Install UniSat Wallet extension', 'error');
-    try {
-      const accts = await window.unisat.requestAccounts();
-      myAddr = accts[0];
-      myPubkey = await window.unisat.getPublicKey();
-      isConnected = true;
-      document.getElementById('conn-dot').classList.add('connected');
-      document.getElementById('conn-label').textContent = 'Connected';
-      document.getElementById('btn-connect').textContent = '✓ Connected';
-      document.getElementById('btn-connect').style.background = 'var(--green)';
-      document.getElementById('wallet-info').style.display = 'block';
-      document.getElementById('disp-addr').textContent = myAddr.slice(0,10) + '...' + myAddr.slice(-6);
-      document.getElementById('cmd-input').disabled = false;
-      document.getElementById('btn-exec').disabled = false;
-      await refresh();
-      toast('Wallet connected!', 'success');
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  // ─── Command execution ─────────────────────────────────────────────────────
-  function fill(cmd) {
-    const input = document.getElementById('cmd-input');
-    input.value = cmd;
-    input.focus();
-  }
-
-  async function executeCmd() {
-    if (!isConnected) return toast('Connect wallet first', 'error');
-    const cmd = document.getElementById('cmd-input').value.trim();
-    if (!cmd) return;
-    try {
-      const sig = await window.unisat.signMessage(cmd);
-      const res = await fetch(`${API}/api/cmd`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cmd, sig, pubkey: myPubkey })
-      });
-      const json = await res.json();
-      if (json.status === 'ok') {
-        toast('Transaction sent!', 'success');
-        document.getElementById('cmd-input').value = '';
-        setTimeout(refresh, 800);
-      } else {
-        toast(json.msg || 'Error', 'error');
-      }
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && document.activeElement.id === 'cmd-input') executeCmd();
-  });
-
-  // ─── Data refresh ──────────────────────────────────────────────────────────
-  async function refresh() {
-    try {
-      const r = await fetch(`${API}/api/state`);
-      const d = await r.json();
-      renderDashboard(d);
-      renderExplorer(d);
-      renderApps(d);
-    } catch(e) { document.getElementById('node-status-dot').textContent = '● OFFLINE'; document.getElementById('node-status-dot').style.color = 'var(--red)'; }
-
-    try {
-      const r = await fetch(`${API}/api/settlements`);
-      const d = await r.json();
-      renderSettlements(d);
-    } catch(e) {}
-  }
-
-  function renderDashboard(d) {
-    document.getElementById('s-txs').textContent = (d.total_transactions || 0).toLocaleString();
-    document.getElementById('s-vol').textContent = ((d.stats?.total_volume_lsat || 0)).toLocaleString();
-    document.getElementById('s-accs').textContent = (d.stats?.total_accounts || 0).toLocaleString();
-    document.getElementById('s-apps').textContent = (d.apps?.length || 0);
-    document.getElementById('s-height').textContent = '#' + (d.block_height || 0);
-    const root = d.latest_state_root || '—';
-    document.getElementById('state-root-bar').textContent = root;
-
-    if (isConnected) {
-      const bal = d.balances?.[myAddr] || 0;
-      document.getElementById('disp-bal').innerHTML = bal.toLocaleString() + '<span>LSAT</span>';
-    }
-
-    const tbody = document.getElementById('tx-tbody');
-    const recent = [...(d.history || [])].reverse().slice(0, 20);
-    tbody.innerHTML = recent.length ? recent.map(tx => renderTxRow(tx, false)).join('') :
-      '<tr><td colspan="6" class="empty-state"><div class="empty-icon">◈</div><div class="empty-text">No transactions yet</div></td></tr>';
-  }
-
-  function renderExplorer(d) {
-    const tbody = document.getElementById('explorer-tbody');
-    const all = [...(d.history || [])].reverse();
-    tbody.innerHTML = all.length ? all.map(tx => renderTxRow(tx, true)).join('') :
-      '<tr><td colspan="8" class="empty-state"><div class="empty-icon">◈</div><div class="empty-text">No transactions yet</div></td></tr>';
-  }
-
-  function renderTxRow(tx, showTime) {
-    const badge = statusBadge(tx.status);
-    const typeBadge = typeBadgeFn(tx.tx_type);
-    const from = tx.from ? (tx.from.length > 14 ? tx.from.slice(0,8)+'…'+tx.from.slice(-6) : tx.from) : '—';
-    const to = tx.to ? (tx.to.length > 14 ? tx.to.slice(0,8)+'…'+tx.to.slice(-6) : tx.to) : '—';
-    const amount = tx.amount > 0 ? `<span class="amount">${tx.amount.toLocaleString()}</span> <span style="color:var(--muted);font-size:11px;">${tx.token||'LSAT'}</span>` : '—';
-    const memo = tx.memo ? `<span style="color:var(--muted);font-size:12px;">${tx.memo}</span>` : '—';
-    const l1 = tx.btc_txid ? `<a href="https://mempool.space/testnet/tx/${tx.btc_txid}" target="_blank" class="mempool-link">L1 ↗</a>` : '';
-    const time = showTime ? `<td class="addr">${new Date(tx.timestamp * 1000).toLocaleTimeString()}</td>` : '';
-    const l1cell = showTime ? `<td>${l1}</td>` : '';
-    return `<tr><td>${typeBadge}</td><td>${badge}</td><td class="addr">${from}</td><td class="addr">${to}</td><td>${amount}</td><td>${memo}</td>${time}${l1cell}</tr>`;
-  }
-
-  function renderSettlements(d) {
-    document.getElementById('settle-root-big').textContent = d.latest_root || '—';
-    const tbody = document.getElementById('settle-tbody');
-    const settlements = d.settlements || [];
-    tbody.innerHTML = settlements.length ? settlements.reverse().map(s => `
-      <tr>
-        <td class="mono" style="font-size:12px; color:var(--green);">${s.memo?.replace('State root anchored', '') || s.txid}</td>
-        <td>${s.btc_txid ? `<a href="https://mempool.space/testnet/tx/${s.btc_txid}" target="_blank" class="mempool-link">${s.btc_txid.slice(0,16)}… ↗</a>` : '—'}</td>
-        <td class="addr">${new Date(s.timestamp * 1000).toLocaleString()}</td>
-      </tr>
-    `).join('') : '<tr><td colspan="3" class="empty-state"><div class="empty-icon">⛓</div><div class="empty-text">No settlements yet — anchoring every 3 minutes</div></td></tr>';
-  }
-
-  function renderApps(d) {
-    const apps = d.apps || [];
-    const grid = document.getElementById('apps-grid');
-    if (!apps.length) {
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">◻</div><div class="empty-text">No apps yet. Be the first to register your game or service!</div><div style="margin-top:8px; font-size:12px; color:var(--muted);">Use: RegisterApp my-game GOLD 10 My-Game-Name</div></div>`;
-      return;
-    }
-    grid.innerHTML = apps.map(a => `
-      <div class="app-card">
-        <div class="app-card-header">
-          <div>
-            <div class="app-name">${a.app_name}</div>
-            <div class="app-token">${a.token_name} Token</div>
-          </div>
-          <span class="badge badge-orange">${a.app_id}</span>
+      <!-- Overview -->
+      <div id="s-overview">
+        <div class="stats">
+          <div class="stat"><div class="stat-l">Balance</div><div class="stat-v c-accent" id="vBalance">0</div><div class="stat-s" id="vBalBtc">0.00000000 BTC</div></div>
+          <div class="stat"><div class="stat-l">Total received</div><div class="stat-v c-green" id="vReceived">0</div><div class="stat-s">sats lifetime</div></div>
+          <div class="stat"><div class="stat-l">Total withdrawn</div><div class="stat-v" id="vWithdrawn">0</div><div class="stat-s">sats lifetime</div></div>
         </div>
-        <div class="app-rate">1 LSAT = ${a.rate_per_lsat} ${a.token_name}</div>
-        <div class="app-desc" style="margin-top:8px;">${a.description || 'No description'}</div>
-        <div class="app-stats">
-          <div class="app-stat"><strong>${(a.lsat_collected||0).toLocaleString()}</strong> LSAT collected</div>
-          ${a.website ? `<div class="app-stat"><a href="${a.website}" target="_blank" style="color:var(--blue);">Website ↗</a></div>` : ''}
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="openModal()">⚡ New invoice</button>
+            <button class="btn btn-ghost" onclick="go(null,'payments')">View payments</button>
+            <button class="btn btn-ghost" onclick="refresh()">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-label">Recent payments</div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Amount</th><th>Invoice</th><th>Time</th></tr></thead>
+            <tbody id="tbRecent"><tr><td colspan="3" class="empty">No payments yet</td></tr></tbody>
+          </table></div>
         </div>
       </div>
-    `).join('');
-  }
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
-  function statusBadge(status) {
-    const map = {
-      'Confirmed': '<span class="badge badge-green">Confirmed</span>',
-      'Finalized': '<span class="badge badge-blue">Finalized</span>',
-      'InChallenge': '<span class="badge badge-yellow">24h Window</span>',
-      'Completed': '<span class="badge badge-green">Completed</span>',
-      'Pending': '<span class="badge badge-gray">Pending</span>',
-    };
-    return map[status] || `<span class="badge badge-gray">${status||'—'}</span>`;
-  }
+      <!-- Invoices -->
+      <div id="s-invoices" style="display:none">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+          <button class="btn btn-primary" onclick="openModal()">⚡ New invoice</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Amount</th><th>Description</th><th>Created</th><th>Status</th><th></th></tr></thead>
+            <tbody id="tbInvoices"><tr><td colspan="5" class="empty">No invoices yet</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
 
-  function typeBadgeFn(type) {
-    const map = {
-      'Transfer': '<span class="badge badge-blue">Transfer</span>',
-      'PegIn': '<span class="badge badge-green">PegIn</span>',
-      'PegOut': '<span class="badge badge-orange">PegOut</span>',
-      'Faucet': '<span class="badge badge-gray">Faucet</span>',
-      'Settlement': '<span class="badge badge-blue">⛓ Settlement</span>',
-      'AppRegister': '<span class="badge badge-orange">AppReg</span>',
-      'AppTokenBuy': '<span class="badge badge-yellow">TokenBuy</span>',
-      'AppTokenTransfer': '<span class="badge badge-yellow">TokenTx</span>',
-      'Deploy': '<span class="badge badge-gray">Deploy</span>',
-      'ContractDeploy': '<span class="badge badge-blue">Contract</span>',
-      'VM_Execute': '<span class="badge badge-blue">Execute</span>',
-    };
-    return map[type] || `<span class="badge badge-gray">${type||'—'}</span>`;
-  }
+      <!-- Payments -->
+      <div id="s-payments" style="display:none">
+        <div class="card">
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Amount</th><th>Invoice ID</th><th>Hash</th><th>Time</th></tr></thead>
+            <tbody id="tbPayments"><tr><td colspan="4" class="empty">No payments yet</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
 
-  function toast(msg, type = 'success') {
-    const el = document.getElementById('toast');
-    document.getElementById('toast-icon').textContent = type === 'success' ? '✅' : '❌';
-    document.getElementById('toast-msg').textContent = msg;
-    el.className = 'show ' + type;
-    setTimeout(() => el.className = '', 3500);
-  }
+      <!-- Settings -->
+      <div id="s-settings" style="display:none">
+        <div style="max-width:500px;display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-label">API Key</div>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Use this key in all API requests. Store it securely.</p>
+            <div class="key-row">
+              <input type="password" id="keyField" readonly>
+              <button class="icon-btn" id="showKeyBtn" onclick="toggleKey()">show</button>
+              <button class="icon-btn" onclick="copyKey()">copy</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-label">Webhook endpoint</div>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Lumen will POST <code style="font-family:var(--mono);font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px">payment.received</code> events to your URL, signed with HMAC-SHA256.</p>
+            <div id="alertWh" class="alert"></div>
+            <div class="fg"><label>URL</label><input type="url" id="whUrl" placeholder="https://yourdomain.com/lumen-webhook"></div>
+            <div class="fg"><label>Signing secret <span style="color:var(--hint)">(recommended)</span></label><input id="whSecret" placeholder="random-secret-string"></div>
+            <div style="display:flex;gap:10px">
+              <button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save</button>
+              <button class="btn btn-danger btn-sm" onclick="delWebhook()">Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-  // ─── Init ───────────────────────────────────────────────────────────────────
-  setInterval(refresh, 4000);
-  refresh();
+      <!-- Docs -->
+      <div id="s-docs" style="display:none">
+        <div style="max-width:600px;display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-label">3-step quickstart</div>
+            <div style="margin-bottom:18px">
+              <p style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:500">1 — Create invoice</p>
+              <div class="code">curl -X POST <span class="n">/api/v1/invoices</span> \<br>
+  -H <span class="s">"Authorization: Bearer lm_live_YOUR_KEY"</span> \<br>
+  -H <span class="s">"Content-Type: application/json"</span> \<br>
+  -d <span class="s">'{"amount_sats": 5000, "description": "Order #42"}'</span></div>
+            </div>
+            <div style="margin-bottom:18px">
+              <p style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:500">2 — Show QR to customer</p>
+              <div class="code"><span class="k">const</span> { bolt11, id } = <span class="k">await</span> res.json();<br><span class="c">// display bolt11 as QR code in your checkout</span></div>
+            </div>
+            <div>
+              <p style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:500">3 — Receive webhook on payment</p>
+              <div class="code">POST <span class="n">https://yourdomain.com/lumen-webhook</span><br>
+X-Lumen-Signature: <span class="s">sha256=abc123...</span><br><br>{<br>  <span class="s">"event"</span>: <span class="s">"payment.received"</span>,<br>  <span class="s">"data"</span>: { <span class="s">"invoice_id"</span>: <span class="s">"..."</span>, <span class="s">"amount_sats"</span>: <span class="n">5000</span> }<br>}</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-label">Endpoints</div>
+            <table>
+              <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td>POST</td><td>/api/v1/register</td><td class="t">Create merchant account</td></tr>
+                <tr><td>GET</td><td>/api/v1/account</td><td class="t">Balance &amp; profile</td></tr>
+                <tr><td>POST</td><td>/api/v1/invoices</td><td class="t">Create Lightning invoice</td></tr>
+                <tr><td>GET</td><td>/api/v1/invoices</td><td class="t">List invoices</td></tr>
+                <tr><td>GET</td><td>/api/v1/invoices/:id</td><td class="t">Get single invoice</td></tr>
+                <tr><td>GET</td><td>/api/v1/payments</td><td class="t">Payment history</td></tr>
+                <tr><td>POST</td><td>/api/v1/webhook</td><td class="t">Configure webhook</td></tr>
+                <tr><td>DELETE</td><td>/api/v1/webhook</td><td class="t">Remove webhook</td></tr>
+                <tr><td>GET</td><td>/api/v1/health</td><td class="t">Node health check</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ─── New invoice modal ─────────────────────────────────── -->
+<div class="modal-bg" id="invModal">
+  <div class="modal">
+    <div class="modal-title">New invoice</div>
+    <div id="alertInv" class="alert"></div>
+    <div id="invForm">
+      <div class="fg"><label>Amount (sats)</label><input type="number" id="invAmt" placeholder="5000" min="1"></div>
+      <div class="fg"><label>Description</label><input id="invDesc" placeholder="Order #42, Coffee, etc."></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="createInvoice()">Create</button>
+      </div>
+    </div>
+    <div id="invResult" style="display:none">
+      <div style="margin:14px 0">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">BOLT11 — scan with any Lightning wallet</p>
+        <div class="bolt11" id="bolt11"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" onclick="copyBolt()">Copy invoice</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let KEY = localStorage.getItem('lumen_key') || '';
+let acct = null;
+
+// ── Init ──────────────────────────────────────────────────
+addEventListener('load', () => {
+  if (KEY) { showApp(); refresh(); setInterval(refresh, 30000); }
+});
+
+function showApp() {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+  if (KEY) document.getElementById('keyField').value = KEY;
+}
+
+// ── Auth ──────────────────────────────────────────────────
+function toggle(mode) {
+  document.getElementById('formRegister').style.display = mode === 'register' ? '' : 'none';
+  document.getElementById('formLogin').style.display    = mode === 'login'    ? '' : 'none';
+}
+
+async function register() {
+  const name  = document.getElementById('rName').value.trim();
+  const email = document.getElementById('rEmail').value.trim();
+  if (!name || !email) { alert_('alertAuth','err','Name and email required'); return; }
+  try {
+    const r = await fetch(`${API}/api/v1/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email }),
+    });
+    const d = await r.json();
+    if (!r.ok) { alert_('alertAuth','err', d.message || 'Registration failed'); return; }
+    KEY = d.api_key;
+    localStorage.setItem('lumen_key', KEY);
+    showApp(); refresh(); setInterval(refresh, 30000);
+  } catch { alert_('alertAuth','err','Cannot connect to node'); }
+}
+
+async function loginKey() {
+  const key = document.getElementById('lKey').value.trim();
+  if (!key) return;
+  KEY = key;
+  try {
+    const r = await api('/api/v1/account');
+    if (r.ok) {
+      localStorage.setItem('lumen_key', KEY);
+      showApp(); refresh(); setInterval(refresh, 30000);
+    } else { alert_('alertAuth','err','Invalid API key'); }
+  } catch { alert_('alertAuth','err','Cannot connect to node'); }
+}
+
+function logout() {
+  localStorage.removeItem('lumen_key');
+  location.reload();
+}
+
+// ── Navigation ────────────────────────────────────────────
+const SECTIONS = ['overview','invoices','payments','settings','docs'];
+function go(e, s) {
+  if (e) e.preventDefault();
+  SECTIONS.forEach(id => {
+    document.getElementById(`s-${id}`).style.display = id === s ? '' : 'none';
+  });
+  document.querySelectorAll('#nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.s === s);
+  });
+  document.getElementById('pageTitle').textContent = s.charAt(0).toUpperCase() + s.slice(1);
+  if (s === 'invoices') loadInvoices();
+  if (s === 'payments') loadPayments();
+  if (s === 'settings' && KEY) document.getElementById('keyField').value = KEY;
+}
+
+// ── API ───────────────────────────────────────────────────
+function api(path, opts = {}) {
+  return fetch(`${API}${path}`, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json', ...opts.headers },
+  });
+}
+
+async function refresh() {
+  try {
+    const r = await api('/api/v1/account');
+    if (!r.ok) return;
+    acct = await r.json();
+
+    document.getElementById('vBalance').textContent   = fmt(acct.balance_sats);
+    document.getElementById('vBalBtc').textContent    = acct.balance_btc + ' BTC';
+    document.getElementById('vReceived').textContent  = fmt(acct.total_received_sats);
+    document.getElementById('vWithdrawn').textContent = fmt(acct.total_withdrawn_sats);
+    document.getElementById('topBal').textContent     = fmt(acct.balance_sats) + ' sats';
+    if (acct.webhook_url) document.getElementById('whUrl').value = acct.webhook_url;
+
+    document.getElementById('nodeDot').style.background = 'var(--green)';
+
+    const pr = await api('/api/v1/payments');
+    if (pr.ok) {
+      const { payments } = await pr.json();
+      const tb = document.getElementById('tbRecent');
+      tb.innerHTML = payments.slice(0,5).map(p => `
+        <tr>
+          <td style="color:var(--green)">+${fmt(p.amount_sats)} sats</td>
+          <td>${p.invoice_id.slice(0,14)}...</td>
+          <td>${dt(p.created_at)}</td>
+        </tr>`).join('') || `<tr><td colspan="3" class="empty">No payments yet</td></tr>`;
+    }
+  } catch {
+    document.getElementById('nodeDot').style.background = 'var(--red)';
+  }
+}
+
+async function loadInvoices() {
+  const r = await api('/api/v1/invoices');
+  if (!r.ok) return;
+  const { invoices } = await r.json();
+  document.getElementById('tbInvoices').innerHTML = invoices.map(i => `
+    <tr>
+      <td>${fmt(i.amount_sats)} sats</td>
+      <td class="t">${esc(i.description)}</td>
+      <td>${dt(i.created_at)}</td>
+      <td><span class="badge b-${i.status}">${i.status}</span></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="showBolt('${esc(i.bolt11)}')">QR</button></td>
+    </tr>`).join('') || `<tr><td colspan="5" class="empty">No invoices yet</td></tr>`;
+}
+
+async function loadPayments() {
+  const r = await api('/api/v1/payments');
+  if (!r.ok) return;
+  const { payments } = await r.json();
+  document.getElementById('tbPayments').innerHTML = payments.map(p => `
+    <tr>
+      <td style="color:var(--green)">+${fmt(p.amount_sats)} sats</td>
+      <td>${p.invoice_id.slice(0,16)}...</td>
+      <td>${p.payment_hash.slice(0,16)}...</td>
+      <td>${dt(p.created_at)}</td>
+    </tr>`).join('') || `<tr><td colspan="4" class="empty">No payments yet</td></tr>`;
+}
+
+// ── Invoice modal ─────────────────────────────────────────
+function openModal() {
+  document.getElementById('invForm').style.display   = '';
+  document.getElementById('invResult').style.display = 'none';
+  document.getElementById('alertInv').classList.remove('show');
+  document.getElementById('invAmt').value  = '';
+  document.getElementById('invDesc').value = '';
+  document.getElementById('invModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('invModal').classList.remove('open');
+  refresh(); loadInvoices();
+}
+function showBolt(b) {
+  document.getElementById('bolt11').textContent = b;
+  document.getElementById('invForm').style.display   = 'none';
+  document.getElementById('invResult').style.display = '';
+  document.getElementById('invModal').classList.add('open');
+}
+function copyBolt() {
+  navigator.clipboard.writeText(document.getElementById('bolt11').textContent);
+}
+async function createInvoice() {
+  const amt  = parseInt(document.getElementById('invAmt').value);
+  const desc = document.getElementById('invDesc').value.trim();
+  if (!amt || amt < 1)  { alert_('alertInv','err','Enter a valid amount'); return; }
+  if (!desc)             { alert_('alertInv','err','Description required'); return; }
+  try {
+    const r = await api('/api/v1/invoices', {
+      method:'POST', body: JSON.stringify({ amount_sats: amt, description: desc }),
+    });
+    const d = await r.json();
+    if (!r.ok) { alert_('alertInv','err', d.message || 'Failed'); return; }
+    document.getElementById('bolt11').textContent     = d.bolt11;
+    document.getElementById('invForm').style.display  = 'none';
+    document.getElementById('invResult').style.display = '';
+  } catch { alert_('alertInv','err','Connection error'); }
+}
+
+// ── Settings ──────────────────────────────────────────────
+function toggleKey() {
+  const f = document.getElementById('keyField');
+  const b = document.getElementById('showKeyBtn');
+  f.type = f.type === 'password' ? 'text' : 'password';
+  b.textContent = f.type === 'password' ? 'show' : 'hide';
+}
+function copyKey() { navigator.clipboard.writeText(KEY); }
+
+async function saveWebhook() {
+  const url    = document.getElementById('whUrl').value.trim();
+  const secret = document.getElementById('whSecret').value.trim();
+  if (!url) { alert_('alertWh','err','URL required'); return; }
+  const r = await api('/api/v1/webhook', {
+    method: 'POST', body: JSON.stringify({ url, secret: secret || undefined }),
+  });
+  if (r.ok) alert_('alertWh','ok','Webhook saved');
+  else { const d=await r.json(); alert_('alertWh','err', d.message||'Failed'); }
+}
+async function delWebhook() {
+  const r = await api('/api/v1/webhook', { method: 'DELETE' });
+  if (r.ok) { alert_('alertWh','ok','Webhook removed'); document.getElementById('whUrl').value=''; }
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function alert_(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = `alert alert-${type==='ok'?'ok':'err'} show`;
+  el.textContent = msg;
+  setTimeout(() => el.classList.remove('show'), 5000);
+}
+function fmt(n) { return (n||0).toLocaleString(); }
+function dt(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 </body>
 </html>

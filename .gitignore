@@ -1,6 +1,8 @@
 # ── SECURITY ────────────────────────────
 .env
 operator.json
+ldk_data_v2/
+*.redb
 
 # ── Rust build artifacts ──────────────────────────────────────
 /target

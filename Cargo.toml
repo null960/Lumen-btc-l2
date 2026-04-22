@@ -1,10 +1,20 @@
 [workspace]
 members = [
-    "node",
+    "crates/lumen-common",
+    "crates/lumen-persistence",
+    "crates/lumen-core",
+    "crates/lumen-api",
+    "node"
 ]
 resolver = "2"
 
-[profile.release]
-overflow-checks = true
-lto = "fat"
-codegen-units = 1
+[workspace.dependencies]
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bitcoin = { version = "0.30.2", features = ["rand", "secp-recovery"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+hex = "0.4"
+rand = "0.8"
+uuid = { version = "1.6", features = ["v4"] }
